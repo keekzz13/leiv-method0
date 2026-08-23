@@ -27,7 +27,7 @@ const attempts: LoadAttempt[] = [
       await ffmpeg.load({ coreURL, wasmURL });
     },
   },
-  // 2–5. CDN fallbacks
+  // 2–6. CDN fallbacks
   {
     name: "jsdelivr-umd-blob",
     run: async (ffmpeg) => {
@@ -190,7 +190,7 @@ export async function probeFile(
   ffmpeg.on("log", logHandler);
 
   try {
-    // Faster probe: only read enough to get streams + duration
+    // Slightly lighter probe
     await ffmpeg.exec([
       "-hide_banner",
       "-i",
@@ -543,4 +543,4 @@ function formatBytes(n: number) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
   return (n / (1024 * 1024)).toFixed(2) + " MB";
-        }
+}
