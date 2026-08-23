@@ -2,16 +2,7 @@
 
 const FAKE_SAMPLE = new Uint8Array([0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00]);
 const CONTAINERS = new Set([
-  "moov",
-  "trak",
-  "mdia",
-  "minf",
-  "dinf",
-  "stbl",
-  "edts",
-  "udta",
-  "meta",
-  "mvex",
+  "moov", "trak", "mdia", "minf", "dinf", "stbl", "edts", "udta", "meta", "mvex",
 ]);
 
 const dv = (buf: ArrayBuffer | Uint8Array) =>
@@ -24,30 +15,25 @@ const dv = (buf: ArrayBuffer | Uint8Array) =>
 function u32(data: Uint8Array, off: number) {
   return dv(data).getUint32(off, false);
 }
-
 function u64(data: Uint8Array, off: number) {
   const hi = dv(data).getUint32(off, false);
   const lo = dv(data).getUint32(off + 4, false);
   return hi * 0x100000000 + lo;
 }
-
 function w32(val: number) {
   const b = new Uint8Array(4);
   dv(b).setUint32(0, val >>> 0, false);
   return b;
 }
-
 function w64(val: number) {
   const b = new Uint8Array(8);
   dv(b).setUint32(0, Math.floor(val / 0x100000000) >>> 0, false);
   dv(b).setUint32(4, val >>> 0, false);
   return b;
 }
-
 function asciiSlice(data: Uint8Array, off: number, len: number) {
   return String.fromCharCode(...data.slice(off, off + len));
 }
-
 function makeBox(type: string, payload: Uint8Array) {
   const size = payload.length + 8;
   const out = new Uint8Array(size);
@@ -56,7 +42,6 @@ function makeBox(type: string, payload: Uint8Array) {
   out.set(payload, 8);
   return out;
 }
-
 function concat(...bufs: Uint8Array[]) {
   const total = bufs.reduce((s, b) => s + b.length, 0);
   const out = new Uint8Array(total);
@@ -107,14 +92,12 @@ function parseBoxes(data: Uint8Array, start: number, end: number): Box[] {
 }
 
 const rawBox = (data: Uint8Array, b: Box) => data.slice(b.start, b.end);
-const payload = (data: Uint8Array, b: Box) =>
-  data.slice(b.start + b.header, b.end);
+const payload = (data: Uint8Array, b: Box) => data.slice(b.start + b.header, b.end);
 
 function findChild(parent: Box, name: string) {
   if (!parent.children) return null;
   return parent.children.find((c) => c.type === name) ?? null;
 }
-
 function childPath(root: Box, path: string[]) {
   let node: Box | null = root;
   for (const name of path) {
@@ -123,19 +106,16 @@ function childPath(root: Box, path: string[]) {
   }
   return node;
 }
-
 function isVideoTrak(data: Uint8Array, trak: Box) {
   const hdlr = childPath(trak, ["mdia", "hdlr"]);
   if (!hdlr) return false;
   const p = payload(data, hdlr);
   return p.length >= 12 && asciiSlice(p, 8, 4) === "vide";
 }
-
 function stszInfo(data: Uint8Array, b: Box) {
   const p = payload(data, b);
   return { sampleSize: u32(p, 4), count: u32(p, 8) };
 }
-
 function patchMdhd(data: Uint8Array, b: Box) {
   const p = new Uint8Array(payload(data, b));
   const langOff = p[0] === 1 ? 28 : 16;
@@ -145,7 +125,6 @@ function patchMdhd(data: Uint8Array, b: Box) {
   }
   return makeBox("mdhd", p);
 }
-
 function patchHdlr(data: Uint8Array, b: Box) {
   const p = payload(data, b);
   if (p.length < 12) return rawBox(data, b);
@@ -159,7 +138,6 @@ function patchHdlr(data: Uint8Array, b: Box) {
   for (let i = 0; i < name.length; i++) newP[24 + i] = name.charCodeAt(i);
   return makeBox("hdlr", newP);
 }
-
 function patchStsz(data: Uint8Array, b: Box, fakeCount: number) {
   if (fakeCount < 1) return rawBox(data, b);
   const p = payload(data, b);
@@ -180,12 +158,9 @@ function patchStsz(data: Uint8Array, b: Box, fakeCount: number) {
   newP.set(flagsVer, 0);
   newP.set(w32(0), 4);
   newP.set(w32(sizes.length), 8);
-  for (let i = 0; i < sizes.length; i++) {
-    newP.set(w32(sizes[i]), 12 + i * 4);
-  }
+  for (let i = 0; i < sizes.length; i++) newP.set(w32(sizes[i]), 12 + i * 4);
   return makeBox("stsz", newP);
 }
-
 function patchStsc(data: Uint8Array, b: Box, totalChunks: number) {
   if (totalChunks < 1) return rawBox(data, b);
   const p = payload(data, b);
@@ -209,14 +184,7 @@ function patchStsc(data: Uint8Array, b: Box, totalChunks: number) {
   }
   return makeBox("stsc", newP);
 }
-
-function patchStco(
-  data: Uint8Array,
-  b: Box,
-  moovDelta: number,
-  mdatPos: number,
-  fakeCount: number
-) {
+function patchStco(data: Uint8Array, b: Box, moovDelta: number, mdatPos: number, fakeCount: number) {
   const p = payload(data, b);
   const flagsVer = p.slice(0, 4);
   const entryCount = u32(p, 4);
@@ -229,19 +197,10 @@ function patchStco(
   const newP = new Uint8Array(8 + offsets.length * 4);
   newP.set(flagsVer, 0);
   newP.set(w32(offsets.length), 4);
-  for (let i = 0; i < offsets.length; i++) {
-    newP.set(w32(offsets[i]), 8 + i * 4);
-  }
+  for (let i = 0; i < offsets.length; i++) newP.set(w32(offsets[i]), 8 + i * 4);
   return makeBox("stco", newP);
 }
-
-function patchCo64(
-  data: Uint8Array,
-  b: Box,
-  moovDelta: number,
-  mdatPos: number,
-  fakeCount: number
-) {
+function patchCo64(data: Uint8Array, b: Box, moovDelta: number, mdatPos: number, fakeCount: number) {
   const p = payload(data, b);
   const flagsVer = p.slice(0, 4);
   const entryCount = u32(p, 4);
@@ -254,9 +213,7 @@ function patchCo64(
   const newP = new Uint8Array(8 + offsets.length * 8);
   newP.set(flagsVer, 0);
   newP.set(w32(offsets.length), 4);
-  for (let i = 0; i < offsets.length; i++) {
-    newP.set(w64(offsets[i]), 8 + i * 8);
-  }
+  for (let i = 0; i < offsets.length; i++) newP.set(w64(offsets[i]), 8 + i * 8);
   return makeBox("co64", newP);
 }
 
@@ -273,39 +230,24 @@ function rebuildMoov(
   if (btype === "udta" || btype === "free" || btype === "uuid") return null;
   if (btype === "mdhd") return patchMdhd(data, node);
   if (btype === "hdlr") return patchHdlr(data, node);
-
   const isVideo = currentTrak[0] === videoTrak;
-
   if (isVideo && btype === "stsz") return patchStsz(data, node, fakeCount);
   if (isVideo && btype === "stts") return rawBox(data, node);
   if (isVideo && btype === "stsc" && fakeCount > 0) {
     const stbl = childPath(videoTrak, ["mdia", "minf", "stbl"]);
-    const offBox = stbl
-      ? findChild(stbl, "stco") || findChild(stbl, "co64")
-      : null;
+    const offBox = stbl ? findChild(stbl, "stco") || findChild(stbl, "co64") : null;
     const totChunks = offBox ? u32(payload(data, offBox), 4) : 0;
     return patchStsc(data, node, totChunks);
   }
-  if (btype === "stco")
-    return patchStco(data, node, moovDelta, mdatPos, fakeCount);
-  if (btype === "co64")
-    return patchCo64(data, node, moovDelta, mdatPos, fakeCount);
-
+  if (btype === "stco") return patchStco(data, node, moovDelta, mdatPos, fakeCount);
+  if (btype === "co64") return patchCo64(data, node, moovDelta, mdatPos, fakeCount);
   if (node.children) {
     const parts: Uint8Array[] = [];
     if (btype === "meta") parts.push(payload(data, node).slice(0, 4));
     for (const child of node.children) {
       const saved = currentTrak[0];
       if (child.type === "trak") currentTrak[0] = child;
-      const rebuilt = rebuildMoov(
-        data,
-        child,
-        videoTrak,
-        moovDelta,
-        mdatPos,
-        fakeCount,
-        currentTrak
-      );
+      const rebuilt = rebuildMoov(data, child, videoTrak, moovDelta, mdatPos, fakeCount, currentTrak);
       currentTrak[0] = saved;
       if (rebuilt !== null) parts.push(rebuilt);
     }
@@ -317,7 +259,6 @@ function rebuildMoov(
 export function tikquickPatch(inputBytes: Uint8Array) {
   const data = inputBytes;
   const topBoxes = parseBoxes(data, 0, data.length);
-
   let moov: Box | null = null;
   let mdat: Box | null = null;
   for (const b of topBoxes) {
@@ -346,37 +287,14 @@ export function tikquickPatch(inputBytes: Uint8Array) {
   const si = stszInfo(data, stszBox);
   const targetCount = Math.floor((si.count * 20) / 3);
   const fakeCount = Math.max(0, targetCount - si.count);
-
   const ctRef: [Box | null] = [null];
 
-  const doRebuild = (moovDelta: number, mdatPos: number) => {
-    ctRef[0] = null;
-    return rebuildMoov(
-      data,
-      moov!,
-      videoTrak!,
-      moovDelta,
-      mdatPos,
-      fakeCount,
-      ctRef
-    )!;
-  };
-
-  // Calculate final positions
   let totalBeforeMdat = 0;
   for (const b of topBoxes) {
     if (b.type === "mdat") break;
     if (b.type === "moov") {
       ctRef[0] = null;
-      totalBeforeMdat += rebuildMoov(
-        data,
-        moov,
-        videoTrak,
-        0,
-        mdat.end,
-        fakeCount,
-        ctRef
-      )!.length;
+      totalBeforeMdat += rebuildMoov(data, moov, videoTrak, 0, mdat.end, fakeCount, ctRef)!.length;
     } else if (!["free", "skip", "uuid"].includes(b.type)) {
       totalBeforeMdat += rawBox(data, b).length;
     }
@@ -384,17 +302,8 @@ export function tikquickPatch(inputBytes: Uint8Array) {
 
   const finalDelta = totalBeforeMdat - mdat.start;
   const finalMdatPos = mdat.end + finalDelta;
-
   ctRef[0] = null;
-  const finalMoov = rebuildMoov(
-    data,
-    moov,
-    videoTrak,
-    finalDelta,
-    finalMdatPos,
-    fakeCount,
-    ctRef
-  )!;
+  const finalMoov = rebuildMoov(data, moov, videoTrak, finalDelta, finalMdatPos, fakeCount, ctRef)!;
 
   const parts: Uint8Array[] = [];
   for (const b of topBoxes) {
@@ -438,9 +347,6 @@ export function tikquickPatch(inputBytes: Uint8Array) {
   };
 }
 
-/**
- * Convenient wrapper used by the UI
- */
 export async function processVideo(file: File): Promise<{
   blob: Blob;
   fakeCount: number;
@@ -449,7 +355,6 @@ export async function processVideo(file: File): Promise<{
   const buffer = await file.arrayBuffer();
   const input = new Uint8Array(buffer);
   const result = tikquickPatch(input);
-
   return {
     blob: new Blob([result.output], { type: "video/mp4" }),
     fakeCount: result.fakeCount,
