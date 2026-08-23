@@ -14,6 +14,8 @@ import { processVideo } from "@/lib/patcher";
 
 type Stage = "idle" | "selected" | "processing" | "done" | "error";
 
+const ease = [0.22, 1, 0.36, 1] as const;
+
 function formatBytes(n: number) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
@@ -22,6 +24,7 @@ function formatBytes(n: number) {
 
 export default function OptimizerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<File | null>(null); // stable reference to avoid permission errors
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
@@ -40,6 +43,7 @@ export default function OptimizerPage() {
   const reset = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    fileRef.current = null;
     setFile(null);
     setPreviewUrl(null);
     setStage("idle");
@@ -59,6 +63,9 @@ export default function OptimizerPage() {
 
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+
+      // Keep a stable ref so processing still works even if state re-renders
+      fileRef.current = f;
 
       const url = URL.createObjectURL(f);
       setFile(f);
@@ -82,7 +89,9 @@ export default function OptimizerPage() {
   );
 
   const startPatch = async () => {
-    if (!file) return;
+    const current = fileRef.current || file;
+    if (!current) return;
+
     setStage("processing");
     setProgress(8);
     setError(null);
@@ -90,15 +99,15 @@ export default function OptimizerPage() {
     const tick = setInterval(() => {
       setProgress((p) => {
         if (p >= 88) return p;
-        return p + Math.random() * 6 + 2;
+        return p + Math.random() * 5 + 1.5;
       });
-    }, 180);
+    }, 220);
 
     try {
-      const { blob } = await processVideo(file);
+      const { blob } = await processVideo(current);
       clearInterval(tick);
       setProgress(100);
-      await new Promise((r) => setTimeout(r, 280));
+      await new Promise((r) => setTimeout(r, 400));
 
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
@@ -107,7 +116,9 @@ export default function OptimizerPage() {
       clearInterval(tick);
       console.error(e);
       const msg =
-        e instanceof Error ? e.message : "Something went wrong while patching.";
+        e instanceof Error
+          ? e.message
+          : "Could not read this video. Try Chrome/Edge or re-select the file.";
       setError(msg);
       setStage("error");
       setProgress(0);
@@ -116,7 +127,12 @@ export default function OptimizerPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 md:py-16">
-      <div className="mb-10 text-center">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease }}
+        className="mb-10 text-center"
+      >
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
           Leiv Method
         </h1>
@@ -135,15 +151,16 @@ export default function OptimizerPage() {
             Always Free
           </span>
         </div>
-      </div>
+      </motion.div>
 
       <AnimatePresence mode="wait">
         {(stage === "idle" || (stage === "error" && !file)) && (
           <motion.div
             key="drop"
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.55, ease }}
             onDragOver={(e) => {
               e.preventDefault();
               setDragOver(true);
@@ -180,16 +197,22 @@ export default function OptimizerPage() {
       </AnimatePresence>
 
       {error && (
-        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200/90">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease }}
+          className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200/90"
+        >
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <p>{error}</p>
-        </div>
+        </motion.div>
       )}
 
       {file && stage !== "idle" && (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease }}
           className="space-y-6"
         >
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
@@ -215,28 +238,41 @@ export default function OptimizerPage() {
             </div>
 
             {previewUrl && (
-              <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, ease }}
+                className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black"
+              >
                 <video
                   src={previewUrl}
                   controls
                   playsInline
                   className="max-h-[360px] w-full object-contain"
                 />
-              </div>
+              </motion.div>
             )}
           </div>
 
           {stage === "selected" && (
-            <button
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease }}
               onClick={startPatch}
               className="w-full rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-100"
             >
               Patch File
-            </button>
+            </motion.button>
           )}
 
           {stage === "processing" && (
-            <div className="space-y-5 rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease }}
+              className="space-y-5 rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+            >
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
                   <span className="text-zinc-400">Patching structure…</span>
@@ -249,7 +285,7 @@ export default function OptimizerPage() {
                     className="h-full rounded-full bg-white"
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, progress)}%` }}
-                    transition={{ ease: "easeOut", duration: 0.25 }}
+                    transition={{ ease: "easeOut", duration: 0.35 }}
                   />
                 </div>
               </div>
@@ -265,11 +301,16 @@ export default function OptimizerPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {stage === "done" && downloadUrl && (
-            <div className="space-y-5">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease }}
+              className="space-y-5"
+            >
               <div className="flex items-center gap-2 text-white">
                 <CheckCircle2 size={18} />
                 <span className="text-sm font-medium">Patch complete</span>
@@ -296,10 +337,15 @@ export default function OptimizerPage() {
                 </a>{" "}
                 to support
               </p>
-            </div>
+            </motion.div>
           )}
 
-          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.1, ease }}
+            className="rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+          >
             <h3 className="text-sm font-semibold text-white">
               Method upload for maximizing quality
             </h3>
@@ -324,7 +370,7 @@ export default function OptimizerPage() {
               <li>Turn on HD mode (default) and post.</li>
             </ol>
             <p className="mt-4 text-sm text-zinc-500">Enjoy!</p>
-          </div>
+          </motion.div>
         </motion.div>
       )}
     </div>
