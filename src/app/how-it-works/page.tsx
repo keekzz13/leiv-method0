@@ -7,22 +7,22 @@ const steps = [
   {
     icon: Upload,
     title: "Select",
-    desc: "Choose an MP4 from your device. The file stays in browser memory only.",
+    desc: "Choose an MP4 from your device. The file stays in your browser only.",
   },
   {
     icon: Search,
     title: "Analyze",
-    desc: "Leiv Method reads the MP4 container and media streams locally using FFmpeg WebAssembly.",
+    desc: "Leiv Method reads the file structure and media tracks locally on your device.",
   },
   {
     icon: Settings2,
     title: "Optimize",
-    desc: "Compatible streams are preserved while the container is rebuilt (fast-start, cleanup). Re-encoding only happens in Compatibility mode if you choose it.",
+    desc: "When possible, original video and audio are kept as-is while the container is cleaned up for smoother playback. Compatibility mode is only used if you choose it.",
   },
   {
     icon: Download,
     title: "Download",
-    desc: "The optimized MP4 is generated as a local Blob. You download it directly — nothing was uploaded.",
+    desc: "Get the optimized MP4 straight from your browser — nothing was uploaded to a server.",
   },
 ];
 
@@ -34,7 +34,7 @@ export default function HowItWorksPage() {
           How it works
         </h1>
         <p className="mt-3 text-sm text-zinc-400">
-          Simple, private, and technically honest.
+          Simple, private, and straightforward.
         </p>
       </div>
 
@@ -45,8 +45,8 @@ export default function HowItWorksPage() {
             initial={{ opacity: 0, x: -12 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.08 }}
-            className="flex gap-5 rounded-2xl border border-white/6 bg-white/[0.02] p-5"
+            transition={{ delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+            className="flex gap-5 rounded-2xl border border-white/6 bg-white/[0.02] p-5 transition hover:border-white/10"
           >
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
               <s.icon size={20} className="text-violet-300" />
@@ -65,13 +65,12 @@ export default function HowItWorksPage() {
       </div>
 
       <div className="mt-12 rounded-2xl border border-white/6 bg-white/[0.02] p-6">
-        <h3 className="text-sm font-medium text-white">Technical note</h3>
+        <h3 className="text-sm font-medium text-white">A quick note</h3>
         <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-          A video file contains both encoded media streams (the actual video and audio data)
-          and a container that organizes them (timestamps, indexes, metadata). When supported,
-          Leiv Method can optimize the container without re-encoding the original video and
-          audio streams — this is what we call lossless stream copy. External platforms may
-          still re-encode your video after you upload it; that is outside our control.
+          A video file has the actual picture and sound data, plus a container that organizes
+          them. Leiv Method can clean up that container without changing the picture and sound
+          when lossless mode succeeds. Apps you upload to later may still process the file on
+          their side — that part is outside this tool.
         </p>
       </div>
     </div>
