@@ -15,7 +15,7 @@ export default function HomePage() {
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-          TikTok-ready · Private · Free beta
+          TikTok Upload Method · 1080p60 · Private
         </motion.div>
 
         <motion.h1
@@ -24,9 +24,9 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
           className="text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl"
         >
-          TikTok MP4 optimizer.
+          TikTok upload method.
           <br />
-          <span className="text-gradient">Keep the quality.</span>
+          <span className="text-gradient">1080p · 60 fps ready.</span>
         </motion.h1>
 
         <motion.p
@@ -35,9 +35,9 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg"
         >
-          Prepare your video for TikTok without unnecessary quality loss.
-          Runs 100% in your browser — no uploads, no accounts. When lossless
-          mode succeeds, original pixels and audio stay intact.
+          Prepare your MP4 for TikTok’s compressor: H.264 High, 1080×1920,
+          60 fps, ~12 Mbps, AAC — so the final upload keeps more detail.
+          Runs only in your browser.
         </motion.p>
 
         <motion.div
@@ -50,7 +50,7 @@ export default function HomePage() {
             href="/optimizer"
             className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
           >
-            Optimize for TikTok
+            Open Upload Method
             <ArrowRight size={16} />
           </Link>
           <Link
@@ -87,7 +87,7 @@ export default function HomePage() {
           {[
             { icon: Cpu, label: "Local", sub: "On your device" },
             { icon: Shield, label: "Private", sub: "No uploads" },
-            { icon: Sparkles, label: "Quality first", sub: "Lossless when possible" },
+            { icon: Sparkles, label: "1080p60", sub: "H.264 · ~12 Mbps" },
           ].map((item) => (
             <div
               key={item.label}
@@ -101,9 +101,9 @@ export default function HomePage() {
         </motion.div>
 
         <p className="mt-4 max-w-md text-xs text-zinc-600">
-          *Lossless mode keeps original video & audio when the file allows it.
-          TikTok may still re-encode on upload — we prepare the cleanest possible
-          source so you start with maximum quality.
+          TikTok always re-encodes. No tool fully bypasses that. We prepare a
+          stronger 1080p60 H.264 source so the result after their compressor
+          looks better.
         </p>
       </section>
 
@@ -111,16 +111,16 @@ export default function HomePage() {
         <div className="grid gap-4 md:grid-cols-3">
           {[
             {
-              title: "Built for TikTok uploads",
-              desc: "Cleans the MP4 container and enables fast-start so playback and uploads feel smoother — without touching pixels when lossless mode works.",
+              title: "TikTok Optimized mode",
+              desc: "Re-encodes to 1080×1920, 60 fps, H.264 High, ~12 Mbps, AAC — the category of prep used by CompressBase-style upload methods.",
             },
             {
-              title: "Quality preserver, not a destroyer",
-              desc: "We only call a result lossless when stream-copy succeeds. No hidden re-encodes. If conversion is needed, we tell you clearly.",
+              title: "Honest about limits",
+              desc: "We don’t claim magic. Desktop upload + “Allow high-quality uploads” in the app still matter as much as the file itself.",
             },
             {
               title: "Stays on your device",
-              desc: "Everything runs in your browser. Nothing is sent to our servers. Close the tab and temporary data is gone.",
+              desc: "Processing runs in your browser with FFmpeg WASM. Nothing is sent to our servers.",
             },
           ].map((f, i) => (
             <motion.div
