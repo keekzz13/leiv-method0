@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Shield, Cpu, Sparkles } from "lucide-react";
+import { ArrowRight, Zap, Shield, Sparkles } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -14,8 +14,8 @@ export default function HomePage() {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-          Leiv Method · TikTok Video ReEncoder · Always Free
+          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+          99% Faster · No Encoding Needed · Always Free
         </motion.div>
 
         <motion.h1
@@ -24,9 +24,9 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
           className="text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl"
         >
-          Patch video with
+          Zero quality loss
           <br />
-          <span className="text-gradient">Leiv Method.</span>
+          <span className="text-zinc-400">on TikTok posts.</span>
         </motion.h1>
 
         <motion.p
@@ -35,9 +35,8 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg"
         >
-          TikTok video reencoder built for no quality loss uploads.
-          1080p60 · H.264 High · private on your device — nothing leaves the
-          browser.
+          Leiv Method patches your MP4 structure instantly — no re-encoding, no
+          quality loss. Your video stays frame-perfect for TikTok.
         </motion.p>
 
         <motion.div
@@ -48,7 +47,7 @@ export default function HomePage() {
         >
           <Link
             href="/optimizer"
-            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-zinc-100"
           >
             Patch with Leiv Method
             <ArrowRight size={16} />
@@ -67,15 +66,16 @@ export default function HomePage() {
           transition={{ delay: 0.35, duration: 0.5 }}
           className="mt-8 text-sm text-zinc-500"
         >
-          Support the tool ·{" "}
+          100% support{" "}
           <a
             href="https://www.tiktok.com/@vennngod1"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-violet-300 underline-offset-4 transition hover:text-violet-200 hover:underline"
+            className="text-white underline underline-offset-4 transition hover:text-zinc-200"
           >
-            Follow @vennngod1 on TikTok
-          </a>
+            @vennngod1
+          </a>{" "}
+          to continue
         </motion.p>
 
         <motion.div
@@ -85,15 +85,15 @@ export default function HomePage() {
           className="mt-14 grid w-full max-w-lg grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/5"
         >
           {[
-            { icon: Cpu, label: "Local", sub: "On your device" },
+            { icon: Zap, label: "99% Faster", sub: "No encoding" },
             { icon: Shield, label: "Private", sub: "No uploads" },
-            { icon: Sparkles, label: "1080p60", sub: "No quality loss" },
+            { icon: Sparkles, label: "Zero loss", sub: "Frame perfect" },
           ].map((item) => (
             <div
               key={item.label}
               className="flex flex-col items-center gap-1 bg-black/40 px-3 py-5"
             >
-              <item.icon size={18} className="mb-1 text-violet-400/80" />
+              <item.icon size={18} className="mb-1 text-zinc-300" />
               <span className="text-sm font-medium text-white">{item.label}</span>
               <span className="text-[11px] text-zinc-500">{item.sub}</span>
             </div>
@@ -105,12 +105,12 @@ export default function HomePage() {
         <div className="grid gap-4 md:grid-cols-3">
           {[
             {
-              title: "TikTok video reencoder",
-              desc: "Leiv Method patches your MP4 to 1080×1920, 60 fps, H.264 High — the format TikTok handles best for sharper posts.",
+              title: "Zero quality loss",
+              desc: "Only the container structure is patched. Your video and audio data stay byte-for-byte identical — perfect for TikTok posts.",
             },
             {
-              title: "No quality loss focus",
-              desc: "Built so your file stays sharp through TikTok’s pipeline. Use Edge or Chrome desktop upload for the best result.",
+              title: "99% faster",
+              desc: "No re-encoding. Processing finishes in seconds even on large files. Always free, no limits.",
             },
             {
               title: "100% on your device",
