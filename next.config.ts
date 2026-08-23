@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 
+/**
+ * Cross-origin isolation is required for SharedArrayBuffer,
+ * which @ffmpeg/core-mt needs for multi-threaded WASM.
+ *
+ * COEP "credentialless" is preferred over "require-corp" so
+ * CDN-loaded cores (jsDelivr/unpkg) still work with blob URLs.
+ */
 const nextConfig: NextConfig = {
   webpack: (config) => {
     config.resolve.fallback = {
@@ -16,15 +23,17 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/:path*",
         headers: [
-          {
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin",
-          },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           {
             key: "Cross-Origin-Embedder-Policy",
             value: "credentialless",
+          },
+          // Helpful for own static assets under isolation
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "cross-origin",
           },
         ],
       },
