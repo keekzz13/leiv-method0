@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -23,25 +23,31 @@ function formatBytes(n: number) {
 export default function OptimizerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [fakeCount, setFakeCount] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    };
+  }, [previewUrl, downloadUrl]);
+
   const reset = useCallback(() => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setFile(null);
+    setPreviewUrl(null);
     setStage("idle");
     setProgress(0);
-    setLogs([]);
     setError(null);
     setDownloadUrl(null);
-    setFakeCount(0);
     if (inputRef.current) inputRef.current.value = "";
-  }, [downloadUrl]);
+  }, [previewUrl, downloadUrl]);
 
   const handleFile = useCallback(
     (f: File) => {
@@ -51,16 +57,18 @@ export default function OptimizerPage() {
         return;
       }
 
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+
+      const url = URL.createObjectURL(f);
       setFile(f);
+      setPreviewUrl(url);
       setStage("selected");
+      setProgress(0);
       setError(null);
-      setLogs([]);
-      if (downloadUrl) {
-        URL.revokeObjectURL(downloadUrl);
-        setDownloadUrl(null);
-      }
+      setDownloadUrl(null);
     },
-    [downloadUrl]
+    [previewUrl, downloadUrl]
   );
 
   const onDrop = useCallback(
@@ -76,35 +84,33 @@ export default function OptimizerPage() {
   const startPatch = async () => {
     if (!file) return;
     setStage("processing");
-    setProgress(10);
-    setLogs(["Reading file into memory..."]);
+    setProgress(8);
     setError(null);
 
+    const tick = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 88) return p;
+        return p + Math.random() * 6 + 2;
+      });
+    }, 180);
+
     try {
-      setProgress(30);
-      setLogs((prev) => [...prev, "Parsing MP4 structure..."]);
-
-      const { blob, fakeCount, origSamples } = await processVideo(file);
-
-      setProgress(90);
-      setLogs((prev) => [
-        ...prev,
-        `Fake samples added: +${fakeCount.toLocaleString()}`,
-        `Original samples: ${origSamples.toLocaleString()}`,
-        "Patch complete ✓",
-      ]);
+      const { blob } = await processVideo(file);
+      clearInterval(tick);
+      setProgress(100);
+      await new Promise((r) => setTimeout(r, 280));
 
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
-      setFakeCount(fakeCount);
-      setProgress(100);
       setStage("done");
     } catch (e: unknown) {
+      clearInterval(tick);
       console.error(e);
       const msg =
         e instanceof Error ? e.message : "Something went wrong while patching.";
       setError(msg);
       setStage("error");
+      setProgress(0);
     }
   };
 
@@ -115,12 +121,24 @@ export default function OptimizerPage() {
           Leiv Method
         </h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Pure structure patch · Zero re-encoding · Video never leaves this tab
+          Zero quality loss · Pure structure patch · Video never leaves this tab
         </p>
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300">
+            99% Faster
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300">
+            No Encoding Needed
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300">
+            Always Free
+          </span>
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
-        {(stage === "idle" || stage === "error") && !file && (
+        {(stage === "idle" || (stage === "error" && !file)) && (
           <motion.div
             key="drop"
             initial={{ opacity: 0, y: 8 }}
@@ -135,7 +153,7 @@ export default function OptimizerPage() {
             onClick={() => inputRef.current?.click()}
             className={`cursor-pointer rounded-3xl border-2 border-dashed p-12 text-center transition-all ${
               dragOver
-                ? "border-violet-400/50 bg-violet-500/10"
+                ? "border-white/40 bg-white/5"
                 : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
             }`}
           >
@@ -155,7 +173,7 @@ export default function OptimizerPage() {
             <p className="text-lg font-medium text-white">Drop your MP4 here</p>
             <p className="mt-1 text-sm text-zinc-500">or click to browse</p>
             <p className="mt-6 text-xs text-zinc-600">
-              MP4 · Instant structure patch · Zero quality loss
+              Instant structure patch · Zero quality loss
             </p>
           </motion.div>
         )}
@@ -176,8 +194,8 @@ export default function OptimizerPage() {
         >
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
             <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
-                <FileVideo className="text-violet-300" size={20} />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5">
+                <FileVideo className="text-zinc-300" size={20} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-white">{file.name}</p>
@@ -195,51 +213,118 @@ export default function OptimizerPage() {
                 </button>
               )}
             </div>
+
+            {previewUrl && (
+              <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black">
+                <video
+                  src={previewUrl}
+                  controls
+                  playsInline
+                  className="max-h-[360px] w-full object-contain"
+                />
+              </div>
+            )}
           </div>
 
           {stage === "selected" && (
             <button
               onClick={startPatch}
-              className="w-full rounded-2xl bg-violet-600 py-4 text-sm font-semibold text-white transition hover:bg-violet-500"
+              className="w-full rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-100"
             >
               Patch File
             </button>
           )}
 
           {stage === "processing" && (
-            <div className="space-y-3">
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <motion.div
-                  className="h-full rounded-full bg-violet-400"
-                  animate={{ width: `${progress}%` }}
-                />
+            <div className="space-y-5 rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="text-zinc-400">Patching structure…</span>
+                  <span className="tabular-nums text-zinc-300">
+                    {Math.min(100, Math.round(progress))}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <motion.div
+                    className="h-full rounded-full bg-white"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, progress)}%` }}
+                    transition={{ ease: "easeOut", duration: 0.25 }}
+                  />
+                </div>
               </div>
-              <div className="rounded-xl bg-black/40 p-4 font-mono text-xs text-zinc-400">
-                {logs.map((l, i) => (
-                  <div key={i}>{l}</div>
+
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="h-3 w-3 animate-pulse rounded-full bg-white/10" />
+                    <div
+                      className="h-3 animate-pulse rounded bg-white/10"
+                      style={{ width: `${55 + i * 12}%` }}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
           {stage === "done" && downloadUrl && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-emerald-400">
+            <div className="space-y-5">
+              <div className="flex items-center gap-2 text-white">
                 <CheckCircle2 size={18} />
-                <span className="text-sm font-medium">
-                  Patch complete · +{fakeCount.toLocaleString()} fake samples
-                </span>
+                <span className="text-sm font-medium">Patch complete</span>
               </div>
+
               <a
                 href={downloadUrl}
                 download={file.name.replace(/\.mp4$/i, "") + "_leiv.mp4"}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-100"
               >
                 <Download size={16} />
                 Download Patched File
               </a>
+
+              <p className="text-center text-sm text-zinc-500">
+                Enjoy the tool? Follow{" "}
+                <a
+                  href="https://www.tiktok.com/@vennngod1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white underline underline-offset-4 hover:text-zinc-200"
+                >
+                  @vennngod1
+                </a>{" "}
+                to support
+              </p>
             </div>
           )}
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+            <h3 className="text-sm font-semibold text-white">
+              Method upload for maximizing quality
+            </h3>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-zinc-400">
+              <li>
+                Open your phone/PC and go to{" "}
+                <strong className="text-zinc-200">Edge</strong> (on phone: turn
+                on desktop mode).
+              </li>
+              <li>
+                Go to{" "}
+                <a
+                  href="https://www.tiktok.com/upload"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white underline underline-offset-4"
+                >
+                  tiktok.com/upload
+                </a>
+              </li>
+              <li>Upload the patched file here.</li>
+              <li>Turn on HD mode (default) and post.</li>
+            </ol>
+            <p className="mt-4 text-sm text-zinc-500">Enjoy!</p>
+          </div>
         </motion.div>
       )}
     </div>
