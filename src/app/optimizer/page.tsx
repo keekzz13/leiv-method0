@@ -137,7 +137,7 @@ export default function OptimizerPage() {
           Leiv Method
         </h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Zero quality loss · Pure structure patch · Video never leaves this tab
+          Zero quality loss · Pure structure patch · Built for creators
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
