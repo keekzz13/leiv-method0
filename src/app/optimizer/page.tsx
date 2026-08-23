@@ -51,8 +51,11 @@ function errorMessage(e: unknown, fallback: string) {
 
 const TIKTOK_FOLLOW_URL = "https://www.tiktok.com/@vennngod1";
 
+const ease = [0.22, 1, 0.36, 1] as const;
+
 export default function OptimizerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [info, setInfo] = useState<MediaInfo | null>(null);
   const [mode, setMode] = useState<OptimizeMode>("tiktok");
@@ -66,6 +69,31 @@ export default function OptimizerPage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showFollowPopup, setShowFollowPopup] = useState(false);
+
+  const stopFakeProgress = useCallback(() => {
+    if (progressTimer.current) {
+      clearInterval(progressTimer.current);
+      progressTimer.current = null;
+    }
+  }, []);
+
+  /** ffmpeg.wasm often reports 0% during long encodes — simulate steady progress */
+  const startFakeProgress = useCallback(() => {
+    stopFakeProgress();
+    setProgress(2);
+    progressTimer.current = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 92) return p;
+        // Slow asymptotic crawl so it never hits 100 until real finish
+        const step = p < 30 ? 1.2 : p < 60 ? 0.7 : p < 80 ? 0.35 : 0.15;
+        return Math.min(92, p + step);
+      });
+    }, 400);
+  }, [stopFakeProgress]);
+
+  useEffect(() => {
+    return () => stopFakeProgress();
+  }, [stopFakeProgress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +116,7 @@ export default function OptimizerPage() {
   }, []);
 
   const reset = useCallback(() => {
+    stopFakeProgress();
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setFile(null);
     setInfo(null);
@@ -100,7 +129,7 @@ export default function OptimizerPage() {
     setDownloadUrl(null);
     setShowFollowPopup(false);
     if (inputRef.current) inputRef.current.value = "";
-  }, [downloadUrl, engineReady]);
+  }, [downloadUrl, engineReady, stopFakeProgress]);
 
   const handleFile = useCallback(
     async (f: File) => {
@@ -173,19 +202,29 @@ export default function OptimizerPage() {
     setLogs([]);
     setError(null);
     setShowFollowPopup(false);
+    startFakeProgress();
 
     try {
       const res = await optimizeMp4(
         file,
         mode,
         (msg) => setLogs((prev) => [...prev, msg]),
-        (p) => setProgress(Math.min(99, Math.round(p * 100)))
+        (p) => {
+          // Prefer real progress when ffmpeg reports meaningful values
+          const pct = Math.round(p * 100);
+          if (pct > 5) {
+            setProgress((prev) => Math.max(prev, Math.min(99, pct)));
+          }
+        }
       );
+
+      stopFakeProgress();
 
       if (res.error) {
         setError(res.error);
         setResult(res);
         setStage("error");
+        setProgress(0);
         return;
       }
 
@@ -194,13 +233,15 @@ export default function OptimizerPage() {
       setResult(res);
       setProgress(100);
       setStage("done");
-      setTimeout(() => setShowFollowPopup(true), 600);
+      setTimeout(() => setShowFollowPopup(true), 800);
     } catch (e: unknown) {
+      stopFakeProgress();
       console.error(e);
       setError(
         errorMessage(e, "Something went wrong while optimizing. Please try again.")
       );
       setStage("error");
+      setProgress(0);
     }
   };
 
@@ -219,9 +260,10 @@ export default function OptimizerPage() {
         {(stage === "idle" || stage === "error") && !file && (
           <motion.div
             key="drop"
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.45, ease }}
             onDragOver={(e) => {
               e.preventDefault();
               setDragOver(true);
@@ -229,7 +271,7 @@ export default function OptimizerPage() {
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
-            className={`cursor-pointer rounded-3xl border-2 border-dashed p-12 text-center transition-all ${
+            className={`cursor-pointer rounded-3xl border-2 border-dashed p-12 text-center transition-all duration-300 ${
               dragOver
                 ? "border-violet-400/50 bg-violet-500/10"
                 : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
@@ -278,8 +320,9 @@ export default function OptimizerPage() {
         (stage === "error" && file)) &&
         file && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease }}
             className="space-y-6"
           >
             <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
@@ -324,7 +367,7 @@ export default function OptimizerPage() {
                         className="h-full rounded-full bg-violet-400"
                         initial={{ width: 0 }}
                         animate={{ width: `${loadProgress}%` }}
-                        transition={{ ease: "easeOut", duration: 0.25 }}
+                        transition={{ ease: "easeOut", duration: 0.4 }}
                       />
                     </div>
                   </div>
@@ -334,8 +377,8 @@ export default function OptimizerPage() {
                         key={i}
                         className="rounded-xl bg-black/30 px-3 py-2"
                       >
-                        <div className="h-3 w-12 animate-pulse rounded bg-white/10" />
-                        <div className="mt-2 h-4 w-16 animate-pulse rounded bg-white/10" />
+                        <div className="skeleton h-3 w-12" />
+                        <div className="skeleton mt-2 h-4 w-16" />
                       </div>
                     ))}
                   </div>
@@ -398,7 +441,7 @@ export default function OptimizerPage() {
                   <button
                     type="button"
                     onClick={() => setMode("tiktok")}
-                    className={`rounded-2xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition duration-300 ${
                       mode === "tiktok"
                         ? "border-violet-400/40 bg-violet-500/10 glow-border"
                         : "border-white/8 bg-white/[0.02] hover:border-white/15"
@@ -425,7 +468,7 @@ export default function OptimizerPage() {
                   <button
                     type="button"
                     onClick={() => setMode("lossless")}
-                    className={`rounded-2xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition duration-300 ${
                       mode === "lossless"
                         ? "border-emerald-400/40 bg-emerald-500/10"
                         : "border-white/8 bg-white/[0.02] hover:border-white/15"
@@ -444,7 +487,7 @@ export default function OptimizerPage() {
                   <button
                     type="button"
                     onClick={() => setMode("compatibility")}
-                    className={`rounded-2xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition duration-300 ${
                       mode === "compatibility"
                         ? "border-amber-400/40 bg-amber-500/10"
                         : "border-white/8 bg-white/[0.02] hover:border-white/15"
@@ -484,15 +527,17 @@ export default function OptimizerPage() {
                       : "Processing on your device…"}
                   </p>
                   <span className="text-sm tabular-nums text-violet-300">
-                    {progress}%
+                    {Math.round(progress)}%
                   </span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                   <motion.div
-                    className="h-full rounded-full bg-violet-400"
+                    className={`h-full rounded-full bg-violet-400 ${
+                      progress < 8 ? "progress-waiting" : ""
+                    }`}
                     initial={{ width: 0 }}
-                    animate={{ width: progress + "%" }}
-                    transition={{ ease: "easeOut" }}
+                    animate={{ width: `${Math.max(progress, 3)}%` }}
+                    transition={{ ease: "easeOut", duration: 0.5 }}
                   />
                 </div>
                 <div className="mt-5 max-h-40 overflow-y-auto rounded-xl bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-zinc-400">
@@ -504,15 +549,17 @@ export default function OptimizerPage() {
                   )}
                 </div>
                 <p className="mt-4 text-xs text-zinc-600">
-                  Keep this tab open. Re-encode can take a bit on longer clips.
+                  Keep this tab open. Re-encode can take a few minutes on longer
+                  clips — progress may move slowly while encoding.
                 </p>
               </div>
             )}
 
             {stage === "done" && result && (
               <motion.div
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease }}
                 className="space-y-5"
               >
                 <div
@@ -592,13 +639,10 @@ export default function OptimizerPage() {
                   </div>
                 </div>
 
-                {/* Highest quality upload — Edge / desktop method */}
+                {/* Highest quality upload guide — Edge desktop mode */}
                 <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 text-sm">
                   <p className="font-medium text-white">
                     How to get the highest quality on TikTok
-                  </p>
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    Use the Edge / desktop browser method (not the phone app).
                   </p>
                   <ol className="mt-3 list-decimal space-y-2.5 pl-5 text-xs leading-relaxed text-zinc-400">
                     <li>
@@ -616,9 +660,10 @@ export default function OptimizerPage() {
                       Saver (Settings → Data Saver)
                     </li>
                     <li>
-                      On a PC, open{" "}
-                      <strong className="text-zinc-200">Microsoft Edge</strong>{" "}
-                      (or Chrome) → go to{" "}
+                      Open <strong className="text-zinc-200">Microsoft Edge</strong>{" "}
+                      (phone or PC) → request{" "}
+                      <strong className="text-zinc-200">Desktop site</strong>{" "}
+                      → go to{" "}
                       <a
                         href="https://www.tiktok.com/upload"
                         target="_blank"
@@ -632,15 +677,13 @@ export default function OptimizerPage() {
                     <li>
                       Upload the file from Leiv Method (
                       <code className="text-zinc-300">*-tiktok-ready.mp4</code>
-                      ) — desktop Edge upload is the highest-quality path
+                      )
                     </li>
                     <li>
-                      Use <strong className="text-zinc-200">Wi‑Fi</strong>, not
-                      mobile data
+                      Use <strong className="text-zinc-200">Wi‑Fi</strong>
                     </li>
                     <li>
-                      After post, watch on Wi‑Fi so HD loads fully — 1080p60 is
-                      fine
+                      After posting, watch on Wi‑Fi so HD loads — 1080p60 is fine
                     </li>
                   </ol>
                 </div>
@@ -715,14 +758,15 @@ export default function OptimizerPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.35 }}
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
             onClick={() => setShowFollowPopup(false)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              initial={{ opacity: 0, y: 28, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ type: "spring", damping: 26, stiffness: 320 }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
               onClick={(e) => e.stopPropagation()}
               className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl"
             >
