@@ -24,8 +24,6 @@ export async function getFFmpeg(
       }
     });
 
-    // Official @ffmpeg/core includes libx264, aac, mpeg4, etc.
-    // Use esm build from unpkg (same version family as @ffmpeg/ffmpeg 0.12.x)
     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
@@ -55,10 +53,6 @@ export interface MediaInfo {
   hasMoov?: boolean;
 }
 
-/**
- * Scan ISO BMFF (MP4) boxes to see whether 'moov' appears before 'mdat'.
- * Fast-start means moov is near the beginning so players can start sooner.
- */
 export function verifyFastStart(data: Uint8Array): boolean {
   if (data.length < 16) return false;
 
@@ -66,7 +60,6 @@ export function verifyFastStart(data: Uint8Array): boolean {
   let moovPos = -1;
   let mdatPos = -1;
 
-  // Walk top-level boxes (size + type)
   while (offset + 8 <= data.length) {
     const size =
       (data[offset] << 24) |
@@ -83,11 +76,9 @@ export function verifyFastStart(data: Uint8Array): boolean {
     if (type === "moov" && moovPos < 0) moovPos = offset;
     if (type === "mdat" && mdatPos < 0) mdatPos = offset;
 
-    // size == 0 means "extends to end of file"; size == 1 means 64-bit size
     if (size === 0) break;
     if (size === 1) {
       if (offset + 16 > data.length) break;
-      // skip 64-bit extended size
       const high =
         (data[offset + 8] << 24) |
         (data[offset + 9] << 16) |
@@ -98,7 +89,6 @@ export function verifyFastStart(data: Uint8Array): boolean {
         (data[offset + 13] << 16) |
         (data[offset + 14] << 8) |
         data[offset + 15];
-      // JS numbers lose precision above 2^53; for typical MP4s low is enough
       const bigSize = high * 0x100000000 + (low >>> 0);
       if (bigSize < 16) break;
       offset += bigSize;
@@ -110,13 +100,11 @@ export function verifyFastStart(data: Uint8Array): boolean {
     if (moovPos >= 0 && mdatPos >= 0) break;
   }
 
-  // Fast-start: moov exists and appears before mdat (or no mdat found yet)
   if (moovPos < 0) return false;
   if (mdatPos < 0) return true;
   return moovPos < mdatPos;
 }
 
-/** Probe metadata from ffmpeg log output (stderr-style) */
 export async function probeFile(
   ffmpeg: FFmpeg,
   file: File
@@ -131,10 +119,9 @@ export async function probeFile(
   ffmpeg.on("log", logHandler);
 
   try {
-    // -hide_banner reduces noise; null muxer forces demux+decode analysis
     await ffmpeg.exec(["-hide_banner", "-i", name, "-f", "null", "-"]);
   } catch {
-    // null muxer often exits non-zero; logs still contain stream info
+    // null muxer often exits non-zero
   }
 
   ffmpeg.off("log", logHandler);
@@ -144,7 +131,6 @@ export async function probeFile(
     name: file.name,
   };
 
-  // Duration: Duration: 00:01:23.45
   const durationMatch = logBuffer.match(
     /Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/
   );
@@ -155,7 +141,6 @@ export async function probeFile(
     info.duration = h * 3600 + m * 60 + s;
   }
 
-  // Video stream line — several common formats
   const videoLine = logBuffer.match(
     /Stream\s+#\d+:\d+(?:\([^)]*\))?:\s*Video:\s*([^\s,(]+)[^]*?(?:(\d{2,5})x(\d{2,5}))?[^]*?(?:([\d.]+)\s*(?:fps|tbr))?/i
   );
@@ -191,7 +176,6 @@ export async function probeFile(
   const bitrateMatch = logBuffer.match(/bitrate:\s*(\d+)\s*kb\/s/i);
   if (bitrateMatch) info.bitrate = parseInt(bitrateMatch[1], 10) * 1000;
 
-  // Structural check: does moov appear before mdat in the file head?
   try {
     const headSize = Math.min(file.size, 4 * 1024 * 1024);
     const head = new Uint8Array(await file.slice(0, headSize).arrayBuffer());
@@ -227,14 +211,6 @@ export interface OptimizeResult {
   error?: string;
 }
 
-/**
- * Compatibility encode attempts.
- * Official @ffmpeg/core ships with libx264 + aac.
- * Fallback chain:
- *   1) libx264 + aac
- *   2) mpeg4 + aac
- *   3) mpeg4 + copy audio
- */
 async function runCompatibilityEncode(
   ffmpeg: FFmpeg,
   inputName: string,
@@ -430,7 +406,6 @@ export async function optimizeMp4(
       ? data
       : new TextEncoder().encode(String(data));
 
-  // Verify fast-start on actual output bytes before claiming it
   const fastStartVerified = verifyFastStart(uint8);
   if (fastStartVerified) {
     log("[✓] Fast-start verified (moov before mdat)");
@@ -438,94 +413,9 @@ export async function optimizeMp4(
     log("[!] Fast-start not detected in output — moov may still be at end");
   }
 
-  // Copy into a plain ArrayBuffer-backed Uint8Array so BlobPart typing is happy
   const bytes = new Uint8Array(uint8.byteLength);
   bytes.set(uint8);
   const blob = new Blob([bytes], { type: "video/mp4" });
-  log(`[✓] Output ready (${formatBytes(blob.size)})`);
-
-  try {
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
-  } catch {
-    // ignore
-  }
-
-  return {
-    blob,
-    mode,
-    streamCopyUsed,
-    fastStartVerified,
-    videoEncoderUsed,
-    outputSize: blob.size,
-    logs,
-  };
-}
-
-function formatBytes(n: number) {
-  if (n < 1024) return n + " B";
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
-  return (n / (1024 * 1024)).toFixed(2) + " MB";
-}tibility mode if you accept possible re-encoding.",
-      };
-    }
-  } else {
-    log("[·] Compatibility mode — may re-encode");
-    const result = await runCompatibilityEncode(
-      ffmpeg,
-      inputName,
-      outputName,
-      log
-    );
-    if (!result.ok) {
-      try {
-        await ffmpeg.deleteFile(inputName);
-      } catch {
-        // ignore
-      }
-      return {
-        blob: new Blob(),
-        mode,
-        streamCopyUsed: false,
-        fastStartVerified: false,
-        outputSize: 0,
-        logs,
-        error:
-          "Compatibility processing failed. No available encoder succeeded for this file.",
-      };
-    }
-    success = true;
-    videoEncoderUsed = result.encoder;
-  }
-
-  if (!success) {
-    return {
-      blob: new Blob(),
-      mode,
-      streamCopyUsed: false,
-      fastStartVerified: false,
-      outputSize: 0,
-      logs,
-      error: "Unknown failure",
-    };
-  }
-
-  log("[·] Reading output…");
-  const data = await ffmpeg.readFile(outputName);
-  const uint8 =
-    data instanceof Uint8Array
-      ? data
-      : new TextEncoder().encode(String(data));
-
-  // Verify fast-start on actual output bytes before claiming it
-  const fastStartVerified = verifyFastStart(uint8);
-  if (fastStartVerified) {
-    log("[✓] Fast-start verified (moov before mdat)");
-  } else {
-    log("[!] Fast-start not detected in output — moov may still be at end");
-  }
-
-  const blob = new Blob([uint8], { type: "video/mp4" });
   log(`[✓] Output ready (${formatBytes(blob.size)})`);
 
   try {
