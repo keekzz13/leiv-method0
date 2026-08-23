@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -12,6 +9,9 @@ const nextConfig: NextConfig = {
       crypto: false,
     };
     return config;
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   async headers() {
     return [
@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Cross-Origin-Embedder-Policy",
-            value: "require-corp",
+            value: "credentialless",
           },
         ],
       },
