@@ -156,8 +156,6 @@ export async function probeFile(
   }
 
   // Video stream line — several common formats
-  // e.g. Stream #0:0: Video: h264 (High) (avc1 / 0x31637661), yuv420p, 1920x1080 [SAR 1:1 DAR 16:9], 30 fps
-  // e.g. Stream #0:0(und): Video: h264, yuv420p, 1280x720, 29.97 fps
   const videoLine = logBuffer.match(
     /Stream\s+#\d+:\d+(?:\([^)]*\))?:\s*Video:\s*([^\s,(]+)[^]*?(?:(\d{2,5})x(\d{2,5}))?[^]*?(?:([\d.]+)\s*(?:fps|tbr))?/i
   );
@@ -232,10 +230,10 @@ export interface OptimizeResult {
 /**
  * Compatibility encode attempts.
  * Official @ffmpeg/core ships with libx264 + aac.
- * Fallback chain uses encoders that are reliably present in the wasm core:
- *   1) libx264 + aac  (preferred, widely supported MP4)
- *   2) mpeg4 + aac    (native mpeg4 encoder, always in FFmpeg builds)
- *   3) mpeg4 + copy audio if aac fails
+ * Fallback chain:
+ *   1) libx264 + aac
+ *   2) mpeg4 + aac
+ *   3) mpeg4 + copy audio
  */
 async function runCompatibilityEncode(
   ffmpeg: FFmpeg,
@@ -382,6 +380,93 @@ export async function optimizeMp4(
         logs,
         error:
           "Lossless stream copy is not possible for this file. Try Compatibility mode if you accept possible re-encoding.",
+      };
+    }
+  } else {
+    log("[·] Compatibility mode — may re-encode");
+    const result = await runCompatibilityEncode(
+      ffmpeg,
+      inputName,
+      outputName,
+      log
+    );
+    if (!result.ok) {
+      try {
+        await ffmpeg.deleteFile(inputName);
+      } catch {
+        // ignore
+      }
+      return {
+        blob: new Blob(),
+        mode,
+        streamCopyUsed: false,
+        fastStartVerified: false,
+        outputSize: 0,
+        logs,
+        error:
+          "Compatibility processing failed. No available encoder succeeded for this file.",
+      };
+    }
+    success = true;
+    videoEncoderUsed = result.encoder;
+  }
+
+  if (!success) {
+    return {
+      blob: new Blob(),
+      mode,
+      streamCopyUsed: false,
+      fastStartVerified: false,
+      outputSize: 0,
+      logs,
+      error: "Unknown failure",
+    };
+  }
+
+  log("[·] Reading output…");
+  const data = await ffmpeg.readFile(outputName);
+  const uint8 =
+    data instanceof Uint8Array
+      ? data
+      : new TextEncoder().encode(String(data));
+
+  // Verify fast-start on actual output bytes before claiming it
+  const fastStartVerified = verifyFastStart(uint8);
+  if (fastStartVerified) {
+    log("[✓] Fast-start verified (moov before mdat)");
+  } else {
+    log("[!] Fast-start not detected in output — moov may still be at end");
+  }
+
+  // Copy into a plain ArrayBuffer-backed Uint8Array so BlobPart typing is happy
+  const bytes = new Uint8Array(uint8.byteLength);
+  bytes.set(uint8);
+  const blob = new Blob([bytes], { type: "video/mp4" });
+  log(`[✓] Output ready (${formatBytes(blob.size)})`);
+
+  try {
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+  } catch {
+    // ignore
+  }
+
+  return {
+    blob,
+    mode,
+    streamCopyUsed,
+    fastStartVerified,
+    videoEncoderUsed,
+    outputSize: blob.size,
+    logs,
+  };
+}
+
+function formatBytes(n: number) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(2) + " MB";
+}tibility mode if you accept possible re-encoding.",
       };
     }
   } else {
