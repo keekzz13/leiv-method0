@@ -5,51 +5,56 @@ export default function PrivacyPage() {
         Your videos stay yours.
       </h1>
       <p className="mt-4 text-base leading-relaxed text-zinc-400">
-        Leiv Method is designed so that your media never leaves your device during optimization.
+        Leiv Method is built so your media never leaves your device during optimization.
       </p>
 
       <div className="mt-10 space-y-8">
         <section>
           <h2 className="text-sm font-medium text-white">Local processing</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            All supported optimization runs inside your browser using FFmpeg compiled to
-            WebAssembly. The video file is read into browser memory, processed there, and
-            the result is offered as a downloadable Blob. No server receives your video for
-            processing.
+            Optimization runs in your browser on your device. Your file is handled in memory
+            here, then offered as a download. We don’t run a server that receives your video
+            for processing.
           </p>
         </section>
 
         <section>
           <h2 className="text-sm font-medium text-white">No video uploads</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            We do not operate a backend that accepts or stores your MP4 files for optimization.
-            Closing or refreshing the page discards temporary in-memory processing data.
+            We don’t store your MP4s for optimization. Closing or refreshing the page clears
+            temporary in-browser processing data.
           </p>
         </section>
 
         <section>
           <h2 className="text-sm font-medium text-white">What we may collect</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            This static site may use privacy-friendly analytics (page views only) if enabled
-            in the future. We never send video content, filenames of your media, or processing
-            results to analytics services.
+            This site may use basic privacy-friendly page analytics later. We never send your
+            video content or processing results to analytics.
           </p>
         </section>
 
         <section>
           <h2 className="text-sm font-medium text-white">Device limits</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Processing depends on your browser and device capabilities (memory, CPU). Very
-            large files may fail or be slow on phones and low-memory devices. That is a
-            client-side constraint, not a server limit.
+            Results depend on your browser and device (memory, CPU). Very large files may be
+            slow or fail on phones — that’s a device limit, not a server limit.
           </p>
         </section>
 
         <section>
-          <h2 className="text-sm font-medium text-white">Contact</h2>
+          <h2 className="text-sm font-medium text-white">Support</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            For privacy questions about this project, open an issue on the project repository
-            or contact the maintainers through the channels listed on the About page.
+            Questions or feedback? Follow{" "}
+            <a
+              href="https://www.tiktok.com/@vennngod1"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-300 hover:underline"
+            >
+              @vennngod1 on TikTok
+            </a>
+            .
           </p>
         </section>
       </div>
