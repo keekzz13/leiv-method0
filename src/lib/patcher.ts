@@ -347,13 +347,46 @@ export function tikquickPatch(inputBytes: Uint8Array) {
   };
 }
 
+/** Robust file → Uint8Array (fixes "could not be read" permission errors) */
+async function fileToUint8(file: File): Promise<Uint8Array> {
+  // Method 1: arrayBuffer (modern)
+  try {
+    const buf = await file.arrayBuffer();
+    if (buf && buf.byteLength > 0) return new Uint8Array(buf);
+  } catch {
+    // fall through
+  }
+
+  // Method 2: slice + arrayBuffer
+  try {
+    const buf = await file.slice(0, file.size).arrayBuffer();
+    if (buf && buf.byteLength > 0) return new Uint8Array(buf);
+  } catch {
+    // fall through
+  }
+
+  // Method 3: FileReader (older browsers / some mobile)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer && reader.result.byteLength > 0) {
+        resolve(new Uint8Array(reader.result));
+      } else {
+        reject(new Error("Could not read this video. Try Chrome/Edge or re-select the file."));
+      }
+    };
+    reader.onerror = () =>
+      reject(new Error("Could not read this video. Try Chrome/Edge or re-select the file."));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export async function processVideo(file: File): Promise<{
   blob: Blob;
   fakeCount: number;
   origSamples: number;
 }> {
-  const buffer = await file.arrayBuffer();
-  const input = new Uint8Array(buffer);
+  const input = await fileToUint8(file);
   const result = tikquickPatch(input);
   return {
     blob: new Blob([result.output], { type: "video/mp4" }),
