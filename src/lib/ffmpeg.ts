@@ -20,7 +20,7 @@ export async function getFFmpeg(
     }
     ffmpeg.on("log", ({ message }) => {
       if (process.env.NODE_ENV === "development") {
-        console.debug("[ffmpeg]", message);
+        console.debug("[optimizer]", message);
       }
     });
 
@@ -121,7 +121,7 @@ export async function probeFile(
   try {
     await ffmpeg.exec(["-hide_banner", "-i", name, "-f", "null", "-"]);
   } catch {
-    // null muxer often exits non-zero
+    // analysis may exit non-zero; logs still useful
   }
 
   ffmpeg.off("log", logHandler);
@@ -219,7 +219,7 @@ async function runCompatibilityEncode(
 ): Promise<{ ok: boolean; encoder?: string }> {
   const attempts: { label: string; args: string[] }[] = [
     {
-      label: "libx264+aac",
+      label: "standard",
       args: [
         "-i",
         inputName,
@@ -242,7 +242,7 @@ async function runCompatibilityEncode(
       ],
     },
     {
-      label: "mpeg4+aac",
+      label: "wide-compat",
       args: [
         "-i",
         inputName,
@@ -261,7 +261,7 @@ async function runCompatibilityEncode(
       ],
     },
     {
-      label: "mpeg4+audio-copy",
+      label: "wide-compat-audio-keep",
       args: [
         "-i",
         inputName,
@@ -280,13 +280,13 @@ async function runCompatibilityEncode(
   ];
 
   for (const attempt of attempts) {
-    log(`[·] Trying encoder: ${attempt.label}`);
+    log(`[·] Trying compatibility path (${attempt.label})…`);
     try {
       await ffmpeg.exec(attempt.args);
-      log(`[✓] Encode succeeded with ${attempt.label}`);
+      log(`[✓] Compatibility path succeeded (${attempt.label})`);
       return { ok: true, encoder: attempt.label };
     } catch {
-      log(`[!] ${attempt.label} failed`);
+      log(`[!] Path unavailable — trying next option`);
       try {
         await ffmpeg.deleteFile(outputName);
       } catch {
@@ -314,16 +314,16 @@ export async function optimizeMp4(
   const inputName = "input.mp4";
   const outputName = "output.mp4";
 
-  log("[·] Loading FFmpeg engine…");
+  log("[·] Preparing optimizer…");
   await ffmpeg.writeFile(inputName, await fetchFile(file));
-  log("[✓] File loaded into memory");
+  log("[✓] File loaded on this device");
 
   let streamCopyUsed = false;
   let videoEncoderUsed: string | undefined;
   let success = false;
 
   if (mode === "lossless") {
-    log("[·] Attempting lossless stream copy…");
+    log("[·] Running lossless optimization…");
     try {
       await ffmpeg.exec([
         "-i",
@@ -339,9 +339,9 @@ export async function optimizeMp4(
       ]);
       streamCopyUsed = true;
       success = true;
-      log("[✓] Stream copy succeeded");
+      log("[✓] Lossless optimization succeeded");
     } catch {
-      log("[!] Stream copy failed — container or codec may be incompatible");
+      log("[!] Lossless mode isn’t possible for this file");
       try {
         await ffmpeg.deleteFile(inputName);
       } catch {
@@ -355,11 +355,11 @@ export async function optimizeMp4(
         outputSize: 0,
         logs,
         error:
-          "Lossless stream copy is not possible for this file. Try Compatibility mode if you accept possible re-encoding.",
+          "Lossless optimization isn’t possible for this file. Try Compatibility mode if you’re okay with possible quality changes.",
       };
     }
   } else {
-    log("[·] Compatibility mode — may re-encode");
+    log("[·] Compatibility mode — may change quality");
     const result = await runCompatibilityEncode(
       ffmpeg,
       inputName,
@@ -380,7 +380,7 @@ export async function optimizeMp4(
         outputSize: 0,
         logs,
         error:
-          "Compatibility processing failed. No available encoder succeeded for this file.",
+          "Compatibility processing failed for this file. The original was not modified.",
       };
     }
     success = true;
@@ -395,11 +395,11 @@ export async function optimizeMp4(
       fastStartVerified: false,
       outputSize: 0,
       logs,
-      error: "Unknown failure",
+      error: "Something went wrong. Please try again.",
     };
   }
 
-  log("[·] Reading output…");
+  log("[·] Finalizing output…");
   const data = await ffmpeg.readFile(outputName);
   const uint8 =
     data instanceof Uint8Array
@@ -408,15 +408,15 @@ export async function optimizeMp4(
 
   const fastStartVerified = verifyFastStart(uint8);
   if (fastStartVerified) {
-    log("[✓] Fast-start verified (moov before mdat)");
+    log("[✓] Quick-start playback layout verified");
   } else {
-    log("[!] Fast-start not detected in output — moov may still be at end");
+    log("[!] Quick-start layout not confirmed");
   }
 
   const bytes = new Uint8Array(uint8.byteLength);
   bytes.set(uint8);
   const blob = new Blob([bytes], { type: "video/mp4" });
-  log(`[✓] Output ready (${formatBytes(blob.size)})`);
+  log(`[✓] Ready to download (${formatBytes(blob.size)})`);
 
   try {
     await ffmpeg.deleteFile(inputName);
