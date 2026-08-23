@@ -4,14 +4,16 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Zap, Shield, Sparkles } from "lucide-react";
 
+const ease = [0.22, 1, 0.36, 1] as const;
+
 export default function HomePage() {
   return (
     <div className="relative">
       <section className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-24 pt-20 text-center md:pt-28">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.75, ease }}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-white" />
@@ -19,9 +21,9 @@ export default function HomePage() {
         </motion.div>
 
         <motion.h1
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, delay: 0.08, ease }}
           className="text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl"
         >
           Zero quality loss
@@ -30,9 +32,9 @@ export default function HomePage() {
         </motion.h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, delay: 0.16, ease }}
           className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg"
         >
           Leiv Method patches your MP4 structure instantly — no re-encoding, no
@@ -40,9 +42,9 @@ export default function HomePage() {
         </motion.p>
 
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, delay: 0.24, ease }}
           className="mt-10 flex flex-wrap items-center justify-center gap-3"
         >
           <Link
@@ -63,7 +65,7 @@ export default function HomePage() {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.35, duration: 0.5 }}
+          transition={{ delay: 0.5, duration: 0.7 }}
           className="mt-8 text-sm text-zinc-500"
         >
           100% support{" "}
@@ -79,9 +81,9 @@ export default function HomePage() {
         </motion.p>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.85, delay: 0.35, ease }}
           className="mt-14 grid w-full max-w-lg grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/5"
         >
           {[
@@ -119,10 +121,10 @@ export default function HomePage() {
           ].map((f, i) => (
             <motion.div
               key={f.title}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 18 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ delay: i * 0.12, duration: 0.7, ease }}
               className="rounded-2xl border border-white/6 bg-white/[0.02] p-5 transition hover:border-white/10 hover:bg-white/[0.04]"
             >
               <h3 className="text-sm font-medium text-white">{f.title}</h3>
