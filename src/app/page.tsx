@@ -7,12 +7,11 @@ import { ArrowRight, Shield, Cpu, Sparkles } from "lucide-react";
 export default function HomePage() {
   return (
     <div className="relative">
-      {/* Hero */}
       <section className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-24 pt-20 text-center md:pt-28">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
@@ -22,7 +21,7 @@ export default function HomePage() {
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.05 }}
+          transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
           className="text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl"
         >
           Optimize your MP4.
@@ -33,17 +32,17 @@ export default function HomePage() {
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.1 }}
+          transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg"
         >
-          Lossless MP4 container optimization directly in your browser.
-          No uploads. No server processing. Your video stays on your device.
+          Optimize your MP4 on your device — no uploads, no servers. When lossless mode
+          succeeds, original quality is preserved during processing.
         </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.15 }}
+          transition={{ duration: 0.55, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
           className="mt-10 flex flex-wrap items-center justify-center gap-3"
         >
           <Link
@@ -61,17 +60,33 @@ export default function HomePage() {
           </Link>
         </motion.div>
 
-        {/* Stats card */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.35, duration: 0.5 }}
+          className="mt-8 text-sm text-zinc-500"
+        >
+          Like the tool?{" "}
+          <a
+            href="https://www.tiktok.com/@vennngod1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-300 underline-offset-4 transition hover:text-violet-200 hover:underline"
+          >
+            Follow @vennngod1 on TikTok
+          </a>
+        </motion.p>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.25 }}
+          transition={{ duration: 0.6, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="mt-14 grid w-full max-w-lg grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/5"
         >
           {[
-            { icon: Cpu, label: "Local", sub: "Browser Processing" },
-            { icon: Shield, label: "Private", sub: "No Video Uploads" },
-            { icon: Sparkles, label: "Lossless*", sub: "Stream Copy" },
+            { icon: Cpu, label: "Local", sub: "On your device" },
+            { icon: Shield, label: "Private", sub: "No uploads" },
+            { icon: Sparkles, label: "Lossless*", sub: "When supported" },
           ].map((item) => (
             <div
               key={item.label}
@@ -85,25 +100,25 @@ export default function HomePage() {
         </motion.div>
 
         <p className="mt-4 text-xs text-zinc-600">
-          *Lossless mode preserves compatible media streams without re-encoding.
+          *Lossless mode keeps original video and audio when the file allows it. Upload
+          apps may still re-encode on their side.
         </p>
       </section>
 
-      {/* Feature strip */}
       <section className="mx-auto max-w-4xl px-4 pb-24">
         <div className="grid gap-4 md:grid-cols-3">
           {[
             {
-              title: "Container optimization",
-              desc: "Rebuild the MP4 structure, move moov atom for fast-start, and clean metadata — without touching encoded pixels when possible.",
+              title: "Cleaner container",
+              desc: "Rebuilds the MP4 structure for smoother playback startup and tidier metadata — without changing pixels when lossless mode succeeds.",
             },
             {
-              title: "Runs entirely offline",
-              desc: "FFmpeg WebAssembly processes your file inside the browser. Nothing is sent to a server. Close the tab and the data is gone.",
+              title: "Stays on your device",
+              desc: "Everything runs in your browser. Nothing is sent to our servers. Close the tab and temporary data is gone.",
             },
             {
               title: "Honest results",
-              desc: "We only mark a result as lossless when stream copying actually succeeded. If re-encoding is required, we tell you clearly.",
+              desc: "We only call a result lossless when quality was actually preserved. If conversion is needed, you’ll see that clearly.",
             },
           ].map((f, i) => (
             <motion.div
@@ -111,8 +126,8 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className="rounded-2xl border border-white/6 bg-white/[0.02] p-5"
+              transition={{ delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              className="rounded-2xl border border-white/6 bg-white/[0.02] p-5 transition hover:border-white/10 hover:bg-white/[0.04]"
             >
               <h3 className="text-sm font-medium text-white">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">{f.desc}</p>
