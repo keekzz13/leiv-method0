@@ -194,7 +194,6 @@ export default function OptimizerPage() {
       setResult(res);
       setProgress(100);
       setStage("done");
-      // Show support popup shortly after success
       setTimeout(() => setShowFollowPopup(true), 600);
     } catch (e: unknown) {
       console.error(e);
@@ -209,11 +208,10 @@ export default function OptimizerPage() {
     <div className="relative mx-auto max-w-3xl px-4 py-12 md:py-16">
       <div className="mb-10 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          TikTok Upload Method
+          Patch video with Leiv Method
         </h1>
         <p className="mt-2 text-sm text-zinc-400">
-          1080×1920 · 60 fps · H.264 High · ~12 Mbps — stronger source for
-          TikTok’s compressor. Private, on-device only.
+          TikTok video reencoder · No quality loss · 1080p60 is fine
         </p>
       </div>
 
@@ -250,14 +248,16 @@ export default function OptimizerPage() {
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
               <Upload className="text-zinc-300" size={24} />
             </div>
-            <p className="text-lg font-medium text-white">Drop your video here</p>
+            <p className="text-lg font-medium text-white">
+              Drop your video here
+            </p>
             <p className="mt-1 text-sm text-zinc-500">or click to browse</p>
             <p className="mt-6 text-xs text-zinc-600">
-              MP4 · Private browser processing · 1080p60 recommended
+              MP4 · Leiv Method · Private on-device reencoder
             </p>
             {!engineReady && (
               <p className="mt-3 text-xs text-violet-300/80">
-                Preparing optimizer engine in the background…
+                Preparing engine in the background…
               </p>
             )}
           </motion.div>
@@ -312,7 +312,7 @@ export default function OptimizerPage() {
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="text-zinc-400">
                         {loadProgress < 45
-                          ? "Loading optimizer engine…"
+                          ? "Loading engine…"
                           : "Reading file details…"}
                       </span>
                       <span className="tabular-nums text-violet-300">
@@ -406,21 +406,19 @@ export default function OptimizerPage() {
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-white">
-                        TikTok Optimized
+                        Leiv Method (TikTok Reencoder)
                       </span>
                       <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
                         Recommended
                       </span>
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                      <strong className="text-zinc-400">1080×1920 · 60 fps · H.264 High · ~12 Mbps · AAC</strong>
+                      <strong className="text-zinc-300">
+                        1080×1920 · 60 fps · H.264 High · ~12 Mbps
+                      </strong>
                       <br />
-                      Re-encodes so TikTok’s compressor starts from a stronger
-                      source. (Same idea as CompressBase-style upload methods.)
-                    </p>
-                    <p className="mt-2 text-[11px] text-zinc-600">
-                      TikTok still re-encodes every upload — this improves the
-                      starting file.
+                      No quality loss focus for TikTok. 1080p60 is fine — this
+                      is the patch Leiv Method applies before you upload.
                     </p>
                   </button>
 
@@ -439,8 +437,7 @@ export default function OptimizerPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                      Stream-copy + faststart. Fast, no pixel re-encode — weak
-                      if your source bitrate is already low.
+                      Stream-copy + faststart only. Fast — no re-encode.
                     </p>
                   </button>
 
@@ -459,7 +456,7 @@ export default function OptimizerPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                      Fallback re-encode when other modes fail.
+                      Fallback re-encode if Leiv Method path fails.
                     </p>
                   </button>
                 </div>
@@ -470,7 +467,7 @@ export default function OptimizerPage() {
                   className="mt-2 w-full rounded-full bg-white py-3.5 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
                 >
                   {mode === "tiktok"
-                    ? "Run TikTok Upload Method (1080p60)"
+                    ? "Patch with Leiv Method"
                     : mode === "lossless"
                       ? "Run Lossless"
                       : "Run Compatibility"}
@@ -483,7 +480,7 @@ export default function OptimizerPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-medium text-white">
                     {mode === "tiktok"
-                      ? "Encoding 1080p60 for TikTok…"
+                      ? "Patching with Leiv Method (1080p60)…"
                       : "Processing on your device…"}
                   </p>
                   <span className="text-sm tabular-nums text-violet-300">
@@ -507,7 +504,7 @@ export default function OptimizerPage() {
                   )}
                 </div>
                 <p className="mt-4 text-xs text-zinc-600">
-                  Re-encoding is slower than lossless. Keep this tab open.
+                  Keep this tab open. Re-encode can take a bit on longer clips.
                 </p>
               </div>
             )}
@@ -529,7 +526,7 @@ export default function OptimizerPage() {
                 >
                   <CheckCircle2 size={18} />
                   {result.mode === "tiktok"
-                    ? "TikTok-ready file ready (1080p60 path when available)"
+                    ? "Leiv Method patch complete — ready for TikTok"
                     : result.streamCopyUsed
                       ? "Lossless optimization completed"
                       : "Compatibility processing completed"}
@@ -565,7 +562,7 @@ export default function OptimizerPage() {
                   </div>
                   <div className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
                     <p className="mb-3 text-xs font-medium uppercase tracking-wider text-violet-300/80">
-                      Optimized
+                      After Leiv Method
                     </p>
                     <dl className="space-y-2 text-sm">
                       <div className="flex justify-between">
@@ -578,7 +575,7 @@ export default function OptimizerPage() {
                         <dt className="text-zinc-500">Mode</dt>
                         <dd className="text-zinc-200">
                           {result.mode === "tiktok"
-                            ? "TikTok Optimized"
+                            ? "Leiv Method"
                             : result.streamCopyUsed
                               ? "Lossless"
                               : "Compatibility"}
@@ -595,15 +592,18 @@ export default function OptimizerPage() {
                   </div>
                 </div>
 
-                {/* Step-by-step max quality upload guide */}
+                {/* Highest quality upload — Edge / desktop method */}
                 <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 text-sm">
                   <p className="font-medium text-white">
-                    How to upload for maximum quality
+                    How to get the highest quality on TikTok
+                  </p>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Use the Edge / desktop browser method (not the phone app).
                   </p>
                   <ol className="mt-3 list-decimal space-y-2.5 pl-5 text-xs leading-relaxed text-zinc-400">
                     <li>
-                      <span className="text-zinc-300">On your phone</span> —
-                      Open TikTok → Profile → ☰ Menu →{" "}
+                      <span className="text-zinc-300">Phone first</span> — TikTok
+                      app → Profile → ☰ →{" "}
                       <strong className="text-zinc-200">
                         Settings and privacy
                       </strong>{" "}
@@ -613,12 +613,12 @@ export default function OptimizerPage() {
                     </li>
                     <li>
                       Turn <strong className="text-zinc-200">OFF</strong> Data
-                      Saver (Settings → Data Saver) so the app doesn’t
-                      downscale the upload
+                      Saver (Settings → Data Saver)
                     </li>
                     <li>
-                      On a <strong className="text-zinc-200">computer</strong>,
-                      go to{" "}
+                      On a PC, open{" "}
+                      <strong className="text-zinc-200">Microsoft Edge</strong>{" "}
+                      (or Chrome) → go to{" "}
                       <a
                         href="https://www.tiktok.com/upload"
                         target="_blank"
@@ -627,28 +627,22 @@ export default function OptimizerPage() {
                       >
                         tiktok.com/upload
                       </a>{" "}
-                      and log in — desktop upload usually gets fewer extra
-                      compress passes than the phone app
+                      and log in
                     </li>
                     <li>
-                      Upload the file you just downloaded (
+                      Upload the file from Leiv Method (
                       <code className="text-zinc-300">*-tiktok-ready.mp4</code>
-                      )
+                      ) — desktop Edge upload is the highest-quality path
                     </li>
                     <li>
-                      Use stable <strong className="text-zinc-200">Wi‑Fi</strong>
-                      , not mobile hotspot / data saver
+                      Use <strong className="text-zinc-200">Wi‑Fi</strong>, not
+                      mobile data
                     </li>
                     <li>
-                      After posting, check the video on Wi‑Fi with HD playback —
-                      quality can look softer on cellular until HD loads
+                      After post, watch on Wi‑Fi so HD loads fully — 1080p60 is
+                      fine
                     </li>
                   </ol>
-                  <p className="mt-3 text-[11px] text-zinc-600">
-                    TikTok always re-encodes. No tool fully bypasses that. A
-                    strong 1080p60 H.264 source + HD upload toggle + desktop
-                    upload is the best practical stack.
-                  </p>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -661,7 +655,6 @@ export default function OptimizerPage() {
                         : "-leiv-optimized.mp4")
                     }
                     onClick={() => {
-                      // ensure popup is visible after user grabs the file
                       setTimeout(() => setShowFollowPopup(true), 400);
                     }}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
@@ -676,7 +669,7 @@ export default function OptimizerPage() {
                     onClick={reset}
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-6 py-3.5 text-sm font-medium text-zinc-200 transition hover:bg-white/10"
                   >
-                    Optimize Another
+                    Patch Another
                   </button>
                 </div>
 
@@ -715,7 +708,7 @@ export default function OptimizerPage() {
           </motion.div>
         )}
 
-      {/* Follow / support popup after successful optimize */}
+      {/* Follow popup */}
       <AnimatePresence>
         {showFollowPopup && stage === "done" && (
           <motion.div
@@ -750,9 +743,9 @@ export default function OptimizerPage() {
                 Enjoy the tool?
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                If this helped your TikTok quality, follow{" "}
-                <span className="text-violet-300">@vennngod1</span> to support
-                free updates — takes two seconds.
+                Follow{" "}
+                <span className="text-violet-300">@vennngod1</span> on TikTok to
+                support Leiv Method — free updates keep coming.
               </p>
 
               <a
