@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Download,
   RotateCcw,
-  Loader2,
 } from "lucide-react";
 import {
   MediaInfo,
@@ -201,10 +200,11 @@ export default function OptimizerPage() {
     <div className="mx-auto max-w-3xl px-4 py-12 md:py-16">
       <div className="mb-10 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          Optimizer
+          TikTok Quality Preserver
         </h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Your video never leaves this browser tab.
+          Optimize your MP4 locally · No quality loss when lossless mode succeeds ·
+          Video never leaves this tab
         </p>
       </div>
 
@@ -241,10 +241,10 @@ export default function OptimizerPage() {
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
               <Upload className="text-zinc-300" size={24} />
             </div>
-            <p className="text-lg font-medium text-white">Drop your MP4 here</p>
+            <p className="text-lg font-medium text-white">Drop your TikTok MP4 here</p>
             <p className="mt-1 text-sm text-zinc-500">or click to browse</p>
             <p className="mt-6 text-xs text-zinc-600">
-              MP4 · Processed on your device · Video never leaves the browser
+              MP4 · Private browser processing · Quality-first optimizer
             </p>
             {!engineReady && (
               <p className="mt-3 text-xs text-violet-300/80">
@@ -408,7 +408,7 @@ export default function OptimizerPage() {
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-zinc-500">
                       Keeps original video and audio when possible. Cleans up the
-                      container for smoother playback.
+                      container for smoother playback and TikTok uploads.
                     </p>
                   </button>
 
@@ -441,7 +441,7 @@ export default function OptimizerPage() {
                   onClick={startOptimize}
                   className="mt-2 w-full rounded-full bg-white py-3.5 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
                 >
-                  Optimize
+                  Optimize for TikTok
                 </button>
               </div>
             )}
@@ -610,4 +610,4 @@ export default function OptimizerPage() {
         )}
     </div>
   );
-            }
+}
