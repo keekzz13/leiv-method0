@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -55,11 +55,34 @@ export default function OptimizerPage() {
   const [mode, setMode] = useState<OptimizeMode>("lossless");
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState(0);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [engineReady, setEngineReady] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  // Pre-load the engine as soon as the page opens
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await getFFmpeg((ratio) => {
+          if (!cancelled) setLoadProgress(Math.round(ratio * 40));
+        });
+        if (!cancelled) {
+          setEngineReady(true);
+          setLoadProgress(40);
+        }
+      } catch {
+        // user can still try later
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reset = useCallback(() => {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
@@ -67,12 +90,13 @@ export default function OptimizerPage() {
     setInfo(null);
     setStage("idle");
     setProgress(0);
+    setLoadProgress(engineReady ? 40 : 0);
     setLogs([]);
     setResult(null);
     setError(null);
     setDownloadUrl(null);
     if (inputRef.current) inputRef.current.value = "";
-  }, [downloadUrl]);
+  }, [downloadUrl, engineReady]);
 
   const handleFile = useCallback(
     async (f: File) => {
@@ -91,6 +115,7 @@ export default function OptimizerPage() {
 
       setFile(f);
       setStage("probing");
+      setLoadProgress(engineReady ? 40 : 0);
       setLogs([]);
       setResult(null);
       if (downloadUrl) {
@@ -99,8 +124,12 @@ export default function OptimizerPage() {
       }
 
       try {
-        const engine = await getFFmpeg();
+        const engine = await getFFmpeg((ratio) => {
+          setLoadProgress(Math.min(70, 40 + Math.round(ratio * 30)));
+        });
+        setLoadProgress(75);
         const meta = await probeFile(engine, f);
+        setLoadProgress(100);
         setInfo(meta);
         setStage("ready");
       } catch (e) {
@@ -119,7 +148,7 @@ export default function OptimizerPage() {
         );
       }
     },
-    [downloadUrl]
+    [downloadUrl, engineReady]
   );
 
   const onDrop = useCallback(
@@ -217,6 +246,11 @@ export default function OptimizerPage() {
             <p className="mt-6 text-xs text-zinc-600">
               MP4 · Processed on your device · Video never leaves the browser
             </p>
+            {!engineReady && (
+              <p className="mt-3 text-xs text-violet-300/80">
+                Preparing optimizer engine in the background…
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -263,6 +297,45 @@ export default function OptimizerPage() {
                 )}
               </div>
 
+              {/* Progress + skeleton while probing */}
+              {stage === "probing" && (
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-zinc-400">
+                        {loadProgress < 45
+                          ? "Loading optimizer engine…"
+                          : "Reading file details…"}
+                      </span>
+                      <span className="tabular-nums text-violet-300">
+                        {loadProgress}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <motion.div
+                        className="h-full rounded-full bg-violet-400"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${loadProgress}%` }}
+                        transition={{ ease: "easeOut", duration: 0.25 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Skeleton cards */}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl bg-black/30 px-3 py-2"
+                      >
+                        <div className="h-3 w-12 animate-pulse rounded bg-white/10" />
+                        <div className="mt-2 h-4 w-16 animate-pulse rounded bg-white/10" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {info && stage !== "probing" && (
                 <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
@@ -306,12 +379,6 @@ export default function OptimizerPage() {
                       </p>
                     </div>
                   ))}
-                </div>
-              )}
-              {stage === "probing" && (
-                <div className="mt-5 flex items-center gap-2 text-sm text-zinc-400">
-                  <Loader2 className="animate-spin" size={16} />
-                  Reading file details…
                 </div>
               )}
             </div>
@@ -523,7 +590,7 @@ export default function OptimizerPage() {
                     <p>{result.error}</p>
                     <p className="mt-2 text-xs text-amber-200/60">
                       The original file was not modified.
-                     </p>
+                    </p>
                   </div>
                 </div>
                 <button
@@ -543,4 +610,4 @@ export default function OptimizerPage() {
         )}
     </div>
   );
-}
+            }
