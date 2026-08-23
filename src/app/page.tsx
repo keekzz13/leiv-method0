@@ -15,7 +15,7 @@ export default function HomePage() {
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-          TikTok Upload Method · 1080p60 · Private
+          Leiv Method · TikTok Video Reencoder · Free
         </motion.div>
 
         <motion.h1
@@ -24,9 +24,9 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
           className="text-4xl font-semibold tracking-tight text-white sm:text-5xl md:text-6xl"
         >
-          TikTok upload method.
+          Patch video with
           <br />
-          <span className="text-gradient">1080p · 60 fps ready.</span>
+          <span className="text-gradient">Leiv Method.</span>
         </motion.h1>
 
         <motion.p
@@ -35,9 +35,9 @@ export default function HomePage() {
           transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg"
         >
-          Prepare your MP4 for TikTok’s compressor: H.264 High, 1080×1920,
-          60 fps, ~12 Mbps, AAC — so the final upload keeps more detail.
-          Runs only in your browser.
+          TikTok video reencoder built for no quality loss uploads.
+          1080p60 · H.264 High · private on your device — nothing leaves the
+          browser.
         </motion.p>
 
         <motion.div
@@ -50,7 +50,7 @@ export default function HomePage() {
             href="/optimizer"
             className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-zinc-100 glow-btn"
           >
-            Open Upload Method
+            Patch with Leiv Method
             <ArrowRight size={16} />
           </Link>
           <Link
@@ -67,14 +67,14 @@ export default function HomePage() {
           transition={{ delay: 0.35, duration: 0.5 }}
           className="mt-8 text-sm text-zinc-500"
         >
-          Made for creators ·{" "}
+          Support the tool ·{" "}
           <a
             href="https://www.tiktok.com/@vennngod1"
             target="_blank"
             rel="noopener noreferrer"
             className="text-violet-300 underline-offset-4 transition hover:text-violet-200 hover:underline"
           >
-            Follow @vennngod1
+            Follow @vennngod1 on TikTok
           </a>
         </motion.p>
 
@@ -87,7 +87,7 @@ export default function HomePage() {
           {[
             { icon: Cpu, label: "Local", sub: "On your device" },
             { icon: Shield, label: "Private", sub: "No uploads" },
-            { icon: Sparkles, label: "1080p60", sub: "H.264 · ~12 Mbps" },
+            { icon: Sparkles, label: "1080p60", sub: "No quality loss" },
           ].map((item) => (
             <div
               key={item.label}
@@ -99,28 +99,22 @@ export default function HomePage() {
             </div>
           ))}
         </motion.div>
-
-        <p className="mt-4 max-w-md text-xs text-zinc-600">
-          TikTok always re-encodes. No tool fully bypasses that. We prepare a
-          stronger 1080p60 H.264 source so the result after their compressor
-          looks better.
-        </p>
       </section>
 
       <section className="mx-auto max-w-4xl px-4 pb-24">
         <div className="grid gap-4 md:grid-cols-3">
           {[
             {
-              title: "TikTok Optimized mode",
-              desc: "Re-encodes to 1080×1920, 60 fps, H.264 High, ~12 Mbps, AAC — the category of prep used by CompressBase-style upload methods.",
+              title: "TikTok video reencoder",
+              desc: "Leiv Method patches your MP4 to 1080×1920, 60 fps, H.264 High — the format TikTok handles best for sharper posts.",
             },
             {
-              title: "Honest about limits",
-              desc: "We don’t claim magic. Desktop upload + “Allow high-quality uploads” in the app still matter as much as the file itself.",
+              title: "No quality loss focus",
+              desc: "Built so your file stays sharp through TikTok’s pipeline. Use Edge or Chrome desktop upload for the best result.",
             },
             {
-              title: "Stays on your device",
-              desc: "Processing runs in your browser with FFmpeg WASM. Nothing is sent to our servers.",
+              title: "100% on your device",
+              desc: "Everything runs in the browser. Your video never leaves this tab. Close it and temporary data is gone.",
             },
           ].map((f, i) => (
             <motion.div

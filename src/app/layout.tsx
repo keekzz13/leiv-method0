@@ -4,17 +4,16 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Leiv Method — TikTok Upload Method | 1080p60 Quality Prep",
+  title: "Leiv Method — TikTok Video Reencoder | No Quality Loss Prep",
   description:
-    "Prepare MP4s for TikTok: H.264 High, 1080×1920, 60 fps, ~12 Mbps, AAC. Private browser processing. Maximize quality before TikTok’s compressor.",
+    "Patch your video with Leiv Method. TikTok video reencoder — 1080p60 H.264 for maximum quality before upload. Private, on-device only.",
   keywords: [
-    "TikTok upload method",
-    "TikTok 1080p 60fps",
-    "TikTok compressor",
+    "TikTok video reencoder",
+    "Leiv Method",
     "TikTok no quality loss",
-    "CompressBase alternative",
+    "TikTok 1080p 60fps",
+    "TikTok upload method",
     "MP4 quality preserver",
-    "browser video tool",
   ],
 };
 
