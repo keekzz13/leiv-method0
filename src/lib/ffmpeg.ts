@@ -1,7 +1,7 @@
 "use client";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { toBlobURL } from "@ffmpeg/util";
 
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
@@ -20,31 +20,84 @@ function hasSharedArrayBuffer() {
 }
 
 /**
- * Robust file → Uint8Array (avoids FileReader Code=-1).
+ * Bulletproof File/Blob → Uint8Array.
+ * Never uses fetchFile for local Files (that path throws Code=-1 on many browsers).
  */
+function readBlobAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  // 1) Native
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
+  }
+  // 2) FileReader
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      if (fr.result instanceof ArrayBuffer) resolve(fr.result);
+      else reject(new Error("FileReader returned non-ArrayBuffer"));
+    };
+    fr.onerror = () => {
+      const code = (fr.error && (fr.error as DOMException).code) ?? -1;
+      reject(new Error(`FileReader failed (code=${code})`));
+    };
+    fr.onabort = () => reject(new Error("FileReader aborted"));
+    fr.readAsArrayBuffer(blob);
+  });
+}
+
 async function fileToUint8(file: File | Blob): Promise<Uint8Array> {
-  try {
-    const buf = await file.arrayBuffer();
-    if (buf && buf.byteLength > 0) return new Uint8Array(buf);
-  } catch {
-    // fall through
+  if (!file || file.size === 0) {
+    throw new Error("This file is empty or invalid. Pick another MP4.");
   }
+
+  // Soft size warning path still attempts read (WASM may OOM later)
+  const size = file.size;
+
+  // A) Full arrayBuffer
   try {
-    const buf = await file.slice(0, file.size).arrayBuffer();
-    if (buf && buf.byteLength > 0) return new Uint8Array(buf);
+    const buf = await readBlobAsArrayBuffer(file);
+    if (buf && buf.byteLength > 0) {
+      return new Uint8Array(buf);
+    }
   } catch {
-    // fall through
+    // continue
   }
+
+  // B) Full slice
   try {
-    const data = await fetchFile(file);
-    if (data && data.byteLength > 0) return data;
+    const buf = await readBlobAsArrayBuffer(file.slice(0, size));
+    if (buf && buf.byteLength > 0) {
+      return new Uint8Array(buf);
+    }
+  } catch {
+    // continue
+  }
+
+  // C) Chunked read (helps flaky mobile / cloud-drive File handles)
+  try {
+    const chunkSize = 4 * 1024 * 1024; // 4MB
+    const out = new Uint8Array(size);
+    let offset = 0;
+    while (offset < size) {
+      const end = Math.min(offset + chunkSize, size);
+      const chunkBuf = await readBlobAsArrayBuffer(file.slice(offset, end));
+      const chunk = new Uint8Array(chunkBuf);
+      if (chunk.byteLength === 0) {
+        throw new Error(`Empty chunk at offset ${offset}`);
+      }
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    if (out.byteLength > 0) return out;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const detail = e instanceof Error ? e.message : String(e);
     throw new Error(
-      `Could not read this video (${msg}). Try Chrome/Edge or re-export the MP4.`
+      `Could not read this video (${detail}). Tips: use Chrome/Edge, download the file fully to device first (not cloud-only), re-export as MP4, or try a smaller clip.`
     );
   }
-  throw new Error("Could not read this video (empty data).");
+
+  throw new Error(
+    "Could not read this video (empty data). Re-save as MP4 and try again."
+  );
 }
 
 type LoadAttempt = {
