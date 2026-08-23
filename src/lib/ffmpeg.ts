@@ -17,6 +17,47 @@ async function blobPair(base: string) {
   return { coreURL, wasmURL };
 }
 
+/**
+ * Robust file → Uint8Array.
+ * Avoids fetchFile FileReader "File could not be read! Code=-1" on some browsers/files.
+ */
+async function fileToUint8(file: File | Blob): Promise<Uint8Array> {
+  // 1) Native arrayBuffer (most reliable in modern browsers)
+  try {
+    const buf = await file.arrayBuffer();
+    if (buf && buf.byteLength > 0) {
+      return new Uint8Array(buf);
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2) slice + arrayBuffer (helps with some mobile File handles)
+  try {
+    const buf = await file.slice(0, file.size).arrayBuffer();
+    if (buf && buf.byteLength > 0) {
+      return new Uint8Array(buf);
+    }
+  } catch {
+    // fall through
+  }
+
+  // 3) Official fetchFile last
+  try {
+    const data = await fetchFile(file);
+    if (data && data.byteLength > 0) return data;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Could not read this video in the browser (${msg}). Try Chrome/Edge, a smaller file, or re-export the MP4.`
+    );
+  }
+
+  throw new Error(
+    "Could not read this video (empty data). Try another file or browser."
+  );
+}
+
 const attempts: LoadAttempt[] = [
   {
     name: "local-umd-blob",
@@ -109,6 +150,19 @@ export async function getFFmpeg(
   return loadingPromise;
 }
 
+/** Reset engine if FS gets stuck after a failed run */
+export async function resetFFmpeg(): Promise<void> {
+  try {
+    if (ffmpegInstance) {
+      ffmpegInstance.terminate();
+    }
+  } catch {
+    // ignore
+  }
+  ffmpegInstance = null;
+  loadingPromise = null;
+}
+
 export interface MediaInfo {
   duration?: number;
   videoCodec?: string;
@@ -178,8 +232,9 @@ export async function probeFile(
   ffmpeg: FFmpeg,
   file: File
 ): Promise<MediaInfo> {
-  const name = "probe_input" + getExt(file.name);
-  await ffmpeg.writeFile(name, await fetchFile(file));
+  const name = "probe_input.mp4";
+  const data = await fileToUint8(file);
+  await ffmpeg.writeFile(name, data);
 
   let logBuffer = "";
   const logHandler = ({ message }: { message: string }) => {
@@ -199,7 +254,7 @@ export async function probeFile(
       "-",
     ]);
   } catch {
-    // ok
+    // ok — still parse logs
   }
 
   ffmpeg.off("log", logHandler);
@@ -271,11 +326,6 @@ export async function probeFile(
   return info;
 }
 
-function getExt(name: string) {
-  const i = name.lastIndexOf(".");
-  return i >= 0 ? name.slice(i).toLowerCase() : ".mp4";
-}
-
 export type OptimizeMode = "lossless" | "tiktok" | "compatibility";
 
 export interface OptimizeResult {
@@ -289,16 +339,13 @@ export interface OptimizeResult {
   error?: string;
 }
 
-/**
- * TikTok Optimized — preferred path:
- * 1080×1920, 60 fps, H.264 High, ~12 Mbps, AAC 192k, faststart
- */
 async function runTikTokEncode(
   ffmpeg: FFmpeg,
   inputName: string,
   outputName: string,
   log: (m: string) => void
 ): Promise<{ ok: boolean; encoder?: string }> {
+  // Simpler filters first — complex pad+fps can fail on some sources
   const attempts: { label: string; args: string[] }[] = [
     {
       label: "tiktok-1080p60",
@@ -306,15 +353,13 @@ async function runTikTokEncode(
         "-i",
         inputName,
         "-vf",
-        "scale=w='min(1080,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=60",
+        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=60",
         "-c:v",
         "libx264",
         "-preset",
         "ultrafast",
         "-profile:v",
         "high",
-        "-level",
-        "4.1",
         "-pix_fmt",
         "yuv420p",
         "-r",
@@ -331,8 +376,6 @@ async function runTikTokEncode(
         "192k",
         "-ar",
         "44100",
-        "-ac",
-        "2",
         "-movflags",
         "+faststart",
         "-y",
@@ -345,7 +388,7 @@ async function runTikTokEncode(
         "-i",
         inputName,
         "-vf",
-        "scale=w='min(1080,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30",
+        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30",
         "-c:v",
         "libx264",
         "-preset",
@@ -373,7 +416,7 @@ async function runTikTokEncode(
       ],
     },
     {
-      label: "tiktok-safe",
+      label: "tiktok-scale-only",
       args: [
         "-i",
         inputName,
@@ -389,10 +432,6 @@ async function runTikTokEncode(
         "yuv420p",
         "-b:v",
         "10M",
-        "-maxrate",
-        "12M",
-        "-bufsize",
-        "20M",
         "-c:a",
         "aac",
         "-b:a",
@@ -431,18 +470,26 @@ async function runTikTokEncode(
   ];
 
   for (const attempt of attempts) {
-    log(`[·] TikTok path (${attempt.label})…`);
+    log(`[·] Leiv Method path (${attempt.label})…`);
     try {
       await ffmpeg.exec(attempt.args);
-      log(`[✓] TikTok path succeeded (${attempt.label})`);
-      return { ok: true, encoder: attempt.label };
-    } catch {
-      log(`[!] Path unavailable — trying next option`);
+      // Confirm output exists before claiming success
       try {
-        await ffmpeg.deleteFile(outputName);
+        const probe = await ffmpeg.readFile(outputName);
+        if (probe && (probe as Uint8Array).byteLength > 0) {
+          log(`[✓] Path succeeded (${attempt.label})`);
+          return { ok: true, encoder: attempt.label };
+        }
       } catch {
-        // ignore
+        log(`[!] Output missing after ${attempt.label}`);
       }
+    } catch {
+      log(`[!] Path unavailable — trying next`);
+    }
+    try {
+      await ffmpeg.deleteFile(outputName);
+    } catch {
+      // ignore
     }
   }
 
@@ -498,38 +545,24 @@ async function runCompatibilityEncode(
         outputName,
       ],
     },
-    {
-      label: "wide-compat-audio-keep",
-      args: [
-        "-i",
-        inputName,
-        "-c:v",
-        "mpeg4",
-        "-q:v",
-        "5",
-        "-c:a",
-        "copy",
-        "-movflags",
-        "+faststart",
-        "-y",
-        outputName,
-      ],
-    },
   ];
 
   for (const attempt of attempts) {
-    log(`[·] Trying compatibility path (${attempt.label})…`);
+    log(`[·] Compatibility (${attempt.label})…`);
     try {
       await ffmpeg.exec(attempt.args);
-      log(`[✓] Compatibility path succeeded (${attempt.label})`);
-      return { ok: true, encoder: attempt.label };
-    } catch {
-      log(`[!] Path unavailable — trying next option`);
-      try {
-        await ffmpeg.deleteFile(outputName);
-      } catch {
-        // ignore
+      const probe = await ffmpeg.readFile(outputName);
+      if (probe && (probe as Uint8Array).byteLength > 0) {
+        log(`[✓] Compatibility succeeded (${attempt.label})`);
+        return { ok: true, encoder: attempt.label };
       }
+    } catch {
+      log(`[!] Path unavailable — trying next`);
+    }
+    try {
+      await ffmpeg.deleteFile(outputName);
+    } catch {
+      // ignore
     }
   }
 
@@ -549,12 +582,45 @@ export async function optimizeMp4(
   };
 
   try {
-    log("[·] Preparing optimizer…");
-    const ffmpeg = await getFFmpeg(onProgress);
+    log("[·] Preparing Leiv Method…");
+    let ffmpeg = await getFFmpeg(onProgress);
     const inputName = "input.mp4";
     const outputName = "output.mp4";
 
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    // Clean any leftover files from a previous failed run
+    try {
+      await ffmpeg.deleteFile(inputName);
+    } catch {
+      // ignore
+    }
+    try {
+      await ffmpeg.deleteFile(outputName);
+    } catch {
+      // ignore
+    }
+
+    log("[·] Reading video into memory…");
+    let fileData: Uint8Array;
+    try {
+      fileData = await fileToUint8(file);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : "File could not be read. Try another browser or re-export the MP4.";
+      return {
+        blob: new Blob(),
+        mode,
+        streamCopyUsed: false,
+        fastStartVerified: false,
+        outputSize: 0,
+        logs,
+        error: msg,
+      };
+    }
+
+    log(`[✓] Read ${formatBytes(fileData.byteLength)}`);
+    await ffmpeg.writeFile(inputName, fileData);
     log("[✓] File loaded on this device");
 
     let streamCopyUsed = false;
@@ -580,7 +646,7 @@ export async function optimizeMp4(
         success = true;
         log("[✓] Lossless optimization succeeded");
       } catch {
-        log("[!] Lossless mode isn’t possible for this file");
+        log("[!] Lossless isn’t possible for this file");
         try {
           await ffmpeg.deleteFile(inputName);
         } catch {
@@ -594,11 +660,11 @@ export async function optimizeMp4(
           outputSize: 0,
           logs,
           error:
-            "Lossless optimization isn’t possible for this file. Try TikTok Optimized mode instead.",
+            "Lossless isn’t possible for this file. Try Leiv Method (TikTok Reencoder) instead.",
         };
       }
     } else if (mode === "tiktok") {
-      log("[·] TikTok Optimized — target 1080×1920 · 60 fps · H.264 High · ~12 Mbps");
+      log("[·] Leiv Method — 1080×1920 · 60 fps · H.264 High · ~12 Mbps");
       const result = await runTikTokEncode(ffmpeg, inputName, outputName, log);
       if (!result.ok) {
         try {
@@ -614,13 +680,13 @@ export async function optimizeMp4(
           outputSize: 0,
           logs,
           error:
-            "TikTok Optimized encoding failed. Try a shorter clip or Compatibility mode.",
+            "Leiv Method encoding failed. Try a shorter clip, Compatibility mode, or another browser.",
         };
       }
       success = true;
       videoEncoderUsed = result.encoder;
     } else {
-      log("[·] Compatibility mode — may change quality");
+      log("[·] Compatibility mode…");
       const result = await runCompatibilityEncode(
         ffmpeg,
         inputName,
@@ -640,8 +706,7 @@ export async function optimizeMp4(
           fastStartVerified: false,
           outputSize: 0,
           logs,
-          error:
-            "Compatibility processing failed. The original was not modified.",
+          error: "Compatibility failed. The original was not modified.",
         };
       }
       success = true;
@@ -660,6 +725,7 @@ export async function optimizeMp4(
       };
     }
 
+    // Free input BEFORE reading output (memory)
     try {
       await ffmpeg.deleteFile(inputName);
     } catch {
@@ -667,19 +733,47 @@ export async function optimizeMp4(
     }
 
     log("[·] Finalizing output…");
-    const data = await ffmpeg.readFile(outputName);
+    let data: Uint8Array | string;
+    try {
+      data = await ffmpeg.readFile(outputName);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        blob: new Blob(),
+        mode,
+        streamCopyUsed: false,
+        fastStartVerified: false,
+        outputSize: 0,
+        logs,
+        error: `Could not read output file (${msg}). Try again or use a smaller video.`,
+      };
+    }
+
     const uint8 =
       data instanceof Uint8Array
         ? data
         : new TextEncoder().encode(String(data));
 
+    if (!uint8.byteLength) {
+      return {
+        blob: new Blob(),
+        mode,
+        streamCopyUsed: false,
+        fastStartVerified: false,
+        outputSize: 0,
+        logs,
+        error: "Output file was empty. Try Compatibility mode or another clip.",
+      };
+    }
+
     const fastStartVerified = verifyFastStart(uint8);
     if (fastStartVerified) {
-      log("[✓] Quick-start playback layout verified");
+      log("[✓] Quick-start layout verified");
     } else {
       log("[!] Quick-start layout not confirmed");
     }
 
+    // Copy into a fresh buffer so we can free WASM memory
     const bytes = new Uint8Array(uint8.byteLength);
     bytes.set(uint8);
     const blob = new Blob([bytes], { type: "video/mp4" });
@@ -705,6 +799,12 @@ export async function optimizeMp4(
       e instanceof Error
         ? e.message
         : "Something went wrong while optimizing.";
+    // Soft reset engine for next attempt
+    try {
+      await resetFFmpeg();
+    } catch {
+      // ignore
+    }
     return {
       blob: new Blob(),
       mode,
