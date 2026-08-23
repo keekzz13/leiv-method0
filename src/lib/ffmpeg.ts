@@ -18,6 +18,16 @@ async function blobPair(base: string) {
 }
 
 const attempts: LoadAttempt[] = [
+  // 1. Local self-hosted (fastest after first visit)
+  {
+    name: "local-umd-blob",
+    run: async (ffmpeg) => {
+      const base = "/ffmpeg";
+      const { coreURL, wasmURL } = await blobPair(base);
+      await ffmpeg.load({ coreURL, wasmURL });
+    },
+  },
+  // 2–5. CDN fallbacks
   {
     name: "jsdelivr-umd-blob",
     run: async (ffmpeg) => {
@@ -180,9 +190,19 @@ export async function probeFile(
   ffmpeg.on("log", logHandler);
 
   try {
-    await ffmpeg.exec(["-hide_banner", "-i", name, "-f", "null", "-"]);
+    // Faster probe: only read enough to get streams + duration
+    await ffmpeg.exec([
+      "-hide_banner",
+      "-i",
+      name,
+      "-vframes",
+      "0",
+      "-f",
+      "null",
+      "-",
+    ]);
   } catch {
-    // ok
+    // ok – we still parse whatever logs we got
   }
 
   ffmpeg.off("log", logHandler);
@@ -461,6 +481,13 @@ export async function optimizeMp4(
       };
     }
 
+    // Free input memory BEFORE reading the output (important for larger files)
+    try {
+      await ffmpeg.deleteFile(inputName);
+    } catch {
+      // ignore
+    }
+
     log("[·] Finalizing output…");
     const data = await ffmpeg.readFile(outputName);
     const uint8 =
@@ -481,7 +508,6 @@ export async function optimizeMp4(
     log(`[✓] Ready to download (${formatBytes(blob.size)})`);
 
     try {
-      await ffmpeg.deleteFile(inputName);
       await ffmpeg.deleteFile(outputName);
     } catch {
       // ignore
@@ -517,4 +543,4 @@ function formatBytes(n: number) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
   return (n / (1024 * 1024)).toFixed(2) + " MB";
-}
+        }
