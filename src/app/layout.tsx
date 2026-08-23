@@ -4,10 +4,19 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Leiv Method — Private Lossless MP4 Optimizer",
+  title: "Leiv Method — TikTok MP4 Quality Preserver | No Quality Loss Optimizer",
   description:
-    "Optimize your MP4 container locally in your browser. No uploads. Lossless stream copy when supported. Your videos stay on your device.",
-  keywords: ["MP4 optimizer", "lossless remux", "fast start", "browser video tool", "privacy"],
+    "Private browser tool that optimizes MP4s for TikTok without re-encoding when possible. Keep original quality, faster start, zero uploads. Lossless stream-copy mode.",
+  keywords: [
+    "TikTok compressor",
+    "TikTok no quality loss",
+    "MP4 quality preserver",
+    "lossless MP4 optimizer",
+    "TikTok video optimizer",
+    "fast start MP4",
+    "browser video tool",
+    "privacy",
+  ],
 };
 
 export default function RootLayout({
