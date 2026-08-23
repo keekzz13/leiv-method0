@@ -457,11 +457,12 @@ export default function OptimizerPage() {
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-zinc-500">
                       <strong className="text-zinc-300">
-                        1080×1920 · 60 fps · H.264 High · ~12 Mbps
+                        1080×1920 · 60 fps · H.264 High · ~15 Mbps · fast encode
                       </strong>
                       <br />
-                      No quality loss focus for TikTok. 1080p60 is fine — this
-                      is the patch Leiv Method applies before you upload.
+                      Max quality for TikTok — keeps 60 fps (not 30). High
+                      bitrate + ultrafast preset = strong source, as fast as
+                      browser WASM allows.
                     </p>
                   </button>
 
@@ -523,7 +524,7 @@ export default function OptimizerPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-medium text-white">
                     {mode === "tiktok"
-                      ? "Patching with Leiv Method (1080p60)…"
+                      ? "Patching with Leiv Method (fast max · 1080p60)…"
                       : "Processing on your device…"}
                   </p>
                   <span className="text-sm tabular-nums text-violet-300">
