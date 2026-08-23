@@ -6,9 +6,62 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
 
-const CORE_URLS = [
-  "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm",
-  "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm",
+type LoadAttempt = {
+  name: string;
+  run: (ffmpeg: FFmpeg) => Promise<void>;
+};
+
+async function blobPair(base: string) {
+  const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript");
+  const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm");
+  return { coreURL, wasmURL };
+}
+
+const attempts: LoadAttempt[] = [
+  {
+    name: "jsdelivr-umd-blob",
+    run: async (ffmpeg) => {
+      const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+      const { coreURL, wasmURL } = await blobPair(base);
+      await ffmpeg.load({ coreURL, wasmURL });
+    },
+  },
+  {
+    name: "unpkg-umd-blob",
+    run: async (ffmpeg) => {
+      const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+      const { coreURL, wasmURL } = await blobPair(base);
+      await ffmpeg.load({ coreURL, wasmURL });
+    },
+  },
+  {
+    name: "jsdelivr-esm-blob",
+    run: async (ffmpeg) => {
+      const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+      const { coreURL, wasmURL } = await blobPair(base);
+      await ffmpeg.load({ coreURL, wasmURL });
+    },
+  },
+  {
+    name: "jsdelivr-umd-direct",
+    run: async (ffmpeg) => {
+      const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+      await ffmpeg.load({
+        coreURL: `${base}/ffmpeg-core.js`,
+        wasmURL: `${base}/ffmpeg-core.wasm`,
+      });
+    },
+  },
+  {
+    name: "unpkg-umd-direct",
+    run: async (ffmpeg) => {
+      const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+      await ffmpeg.load({
+        coreURL: `${base}/ffmpeg-core.js`,
+        wasmURL: `${base}/ffmpeg-core.wasm`,
+      });
+    },
+  },
 ];
 
 export async function getFFmpeg(
@@ -18,39 +71,30 @@ export async function getFFmpeg(
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
-    const ffmpeg = new FFmpeg();
-    if (onProgress) {
-      ffmpeg.on("progress", ({ progress }) => onProgress(progress));
-    }
+    const errors: string[] = [];
 
-    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      const ffmpeg = new FFmpeg();
+      if (onProgress) {
+        ffmpeg.on("progress", ({ progress }) => onProgress(progress));
+      }
 
-    for (const baseURL of CORE_URLS) {
       try {
-        await ffmpeg.load({
-          coreURL: await toBlobURL(
-            `${baseURL}/ffmpeg-core.js`,
-            "text/javascript"
-          ),
-          wasmURL: await toBlobURL(
-            `${baseURL}/ffmpeg-core.wasm`,
-            "application/wasm"
-          ),
-        });
-        ffmpegInstance = ffmpeg;
-        return ffmpeg;
+        await attempt.run(ffmpeg);
+        if (ffmpeg.loaded) {
+          ffmpegInstance = ffmpeg;
+          return ffmpeg;
+        }
+        errors.push(`${attempt.name}: loaded=false`);
       } catch (e) {
-        lastError = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        errors.push(`${attempt.name}: ${msg}`);
       }
     }
 
     loadingPromise = null;
-    const detail =
-      lastError instanceof Error
-        ? lastError.message
-        : "Could not load the optimizer engine";
     throw new Error(
-      `Optimizer failed to start. Check your connection or try another browser. (${detail})`
+      `Optimizer engine could not start in this browser. Try Chrome/Edge on desktop, disable ad-block for this site, or try again later. Details: ${errors.slice(0, 3).join(" | ")}`
     );
   })();
 
@@ -138,7 +182,7 @@ export async function probeFile(
   try {
     await ffmpeg.exec(["-hide_banner", "-i", name, "-f", "null", "-"]);
   } catch {
-    // analysis may exit non-zero
+    // ok
   }
 
   ffmpeg.off("log", logHandler);
@@ -328,11 +372,11 @@ export async function optimizeMp4(
   };
 
   try {
+    log("[·] Preparing optimizer…");
     const ffmpeg = await getFFmpeg(onProgress);
     const inputName = "input.mp4";
     const outputName = "output.mp4";
 
-    log("[·] Preparing optimizer…");
     await ffmpeg.writeFile(inputName, await fetchFile(file));
     log("[✓] File loaded on this device");
 
