@@ -18,7 +18,6 @@ async function blobPair(base: string) {
 }
 
 const attempts: LoadAttempt[] = [
-  // 1. Local self-hosted (fastest after first visit)
   {
     name: "local-umd-blob",
     run: async (ffmpeg) => {
@@ -27,7 +26,6 @@ const attempts: LoadAttempt[] = [
       await ffmpeg.load({ coreURL, wasmURL });
     },
   },
-  // 2–6. CDN fallbacks
   {
     name: "jsdelivr-umd-blob",
     run: async (ffmpeg) => {
@@ -104,7 +102,7 @@ export async function getFFmpeg(
 
     loadingPromise = null;
     throw new Error(
-      `Optimizer engine could not start in this browser. Try Chrome/Edge on desktop, disable ad-block for this site, or try again later. Details: ${errors.slice(0, 3).join(" | ")}`
+      `Optimizer engine could not start. Try Chrome/Edge (desktop), disable ad-block, or use Kiwi Browser. Details: ${errors.slice(0, 3).join(" | ")}`
     );
   })();
 
@@ -190,7 +188,6 @@ export async function probeFile(
   ffmpeg.on("log", logHandler);
 
   try {
-    // Slightly lighter probe
     await ffmpeg.exec([
       "-hide_banner",
       "-i",
@@ -202,7 +199,7 @@ export async function probeFile(
       "-",
     ]);
   } catch {
-    // ok – we still parse whatever logs we got
+    // ok
   }
 
   ffmpeg.off("log", logHandler);
@@ -279,7 +276,7 @@ function getExt(name: string) {
   return i >= 0 ? name.slice(i).toLowerCase() : ".mp4";
 }
 
-export type OptimizeMode = "lossless" | "compatibility";
+export type OptimizeMode = "lossless" | "tiktok" | "compatibility";
 
 export interface OptimizeResult {
   blob: Blob;
@@ -290,6 +287,166 @@ export interface OptimizeResult {
   outputSize: number;
   logs: string[];
   error?: string;
+}
+
+/**
+ * TikTok Optimized — preferred path:
+ * 1080×1920, 60 fps, H.264 High, ~12 Mbps, AAC 192k, faststart
+ */
+async function runTikTokEncode(
+  ffmpeg: FFmpeg,
+  inputName: string,
+  outputName: string,
+  log: (m: string) => void
+): Promise<{ ok: boolean; encoder?: string }> {
+  const attempts: { label: string; args: string[] }[] = [
+    {
+      label: "tiktok-1080p60",
+      args: [
+        "-i",
+        inputName,
+        "-vf",
+        "scale=w='min(1080,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=60",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-profile:v",
+        "high",
+        "-level",
+        "4.1",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "60",
+        "-b:v",
+        "12M",
+        "-maxrate",
+        "15M",
+        "-bufsize",
+        "24M",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        "-movflags",
+        "+faststart",
+        "-y",
+        outputName,
+      ],
+    },
+    {
+      label: "tiktok-1080p30",
+      args: [
+        "-i",
+        inputName,
+        "-vf",
+        "scale=w='min(1080,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-profile:v",
+        "high",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+        "-b:v",
+        "10M",
+        "-maxrate",
+        "12M",
+        "-bufsize",
+        "20M",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        "-y",
+        outputName,
+      ],
+    },
+    {
+      label: "tiktok-safe",
+      args: [
+        "-i",
+        inputName,
+        "-vf",
+        "scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-profile:v",
+        "high",
+        "-pix_fmt",
+        "yuv420p",
+        "-b:v",
+        "10M",
+        "-maxrate",
+        "12M",
+        "-bufsize",
+        "20M",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+        "-movflags",
+        "+faststart",
+        "-y",
+        outputName,
+      ],
+    },
+    {
+      label: "tiktok-crf",
+      args: [
+        "-i",
+        inputName,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-profile:v",
+        "high",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        "18",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        "-y",
+        outputName,
+      ],
+    },
+  ];
+
+  for (const attempt of attempts) {
+    log(`[·] TikTok path (${attempt.label})…`);
+    try {
+      await ffmpeg.exec(attempt.args);
+      log(`[✓] TikTok path succeeded (${attempt.label})`);
+      return { ok: true, encoder: attempt.label };
+    } catch {
+      log(`[!] Path unavailable — trying next option`);
+      try {
+        await ffmpeg.deleteFile(outputName);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return { ok: false };
 }
 
 async function runCompatibilityEncode(
@@ -405,7 +562,7 @@ export async function optimizeMp4(
     let success = false;
 
     if (mode === "lossless") {
-      log("[·] Running lossless optimization…");
+      log("[·] Running lossless container cleanup…");
       try {
         await ffmpeg.exec([
           "-i",
@@ -437,9 +594,31 @@ export async function optimizeMp4(
           outputSize: 0,
           logs,
           error:
-            "Lossless optimization isn’t possible for this file. Try Compatibility mode if you’re okay with possible quality changes.",
+            "Lossless optimization isn’t possible for this file. Try TikTok Optimized mode instead.",
         };
       }
+    } else if (mode === "tiktok") {
+      log("[·] TikTok Optimized — target 1080×1920 · 60 fps · H.264 High · ~12 Mbps");
+      const result = await runTikTokEncode(ffmpeg, inputName, outputName, log);
+      if (!result.ok) {
+        try {
+          await ffmpeg.deleteFile(inputName);
+        } catch {
+          // ignore
+        }
+        return {
+          blob: new Blob(),
+          mode,
+          streamCopyUsed: false,
+          fastStartVerified: false,
+          outputSize: 0,
+          logs,
+          error:
+            "TikTok Optimized encoding failed. Try a shorter clip or Compatibility mode.",
+        };
+      }
+      success = true;
+      videoEncoderUsed = result.encoder;
     } else {
       log("[·] Compatibility mode — may change quality");
       const result = await runCompatibilityEncode(
@@ -462,7 +641,7 @@ export async function optimizeMp4(
           outputSize: 0,
           logs,
           error:
-            "Compatibility processing failed for this file. The original was not modified.",
+            "Compatibility processing failed. The original was not modified.",
         };
       }
       success = true;
@@ -481,7 +660,6 @@ export async function optimizeMp4(
       };
     }
 
-    // Free input memory BEFORE reading the output (important for larger files)
     try {
       await ffmpeg.deleteFile(inputName);
     } catch {
