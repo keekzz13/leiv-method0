@@ -523,10 +523,24 @@ export default function OptimizerPage() {
                     <p>{result.error}</p>
                     <p className="mt-2 text-xs text-amber-200/60">
                       The original file was not modified.
-                    </p>
+                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setMode("compa
+                    setMode("compatibility");
+                    setStage("ready");
+                    setError(null);
+                  }}
+                  className="w-full rounded-full border border-white/10 bg-white/5 py-3 text-sm text-zinc-200 hover:bg-white/10"
+                >
+                  Switch to Compatibility mode
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+    </div>
+  );
+}
