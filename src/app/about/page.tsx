@@ -5,29 +5,38 @@ export default function AboutPage() {
         About Leiv Method
       </h1>
       <p className="mt-4 text-base leading-relaxed text-zinc-400">
-        Leiv Method is a free, open-minded browser tool for lossless (when possible) MP4
-        container optimization. It exists so creators can tidy containers, enable fast-start,
-        and clean metadata without sending files to a remote server.
+        Leiv Method is a free browser tool for MP4 container optimization. It helps you tidy
+        files and prepare them for smoother local playback — without sending videos to a
+        remote server.
       </p>
 
       <div className="mt-10 space-y-6 text-sm leading-relaxed text-zinc-400">
         <p>
-          <strong className="text-zinc-200">Beta status.</strong> This is an early release.
-          Expect bugs, incomplete codec coverage, and rough edges on some devices. Feedback
-          is welcome.
+          <strong className="text-zinc-200">Beta status.</strong> Early release. Expect bugs
+          and rough edges on some devices. Feedback is welcome.
         </p>
         <p>
-          <strong className="text-zinc-200">What we do not claim.</strong> We do not promise
-          increased reach on any social platform, prevention of shadow bans, or bypassing of
-          moderation. Those outcomes depend on platform-side processing that we cannot control.
+          <strong className="text-zinc-200">What we don’t claim.</strong> We don’t promise
+          more reach, fewer restrictions, or special treatment on any social app. Those
+          outcomes depend on each platform.
         </p>
         <p>
-          <strong className="text-zinc-200">What we do claim.</strong> When lossless stream
-          copy succeeds, the encoded video and audio samples are copied as-is — no additional
-          quality loss is introduced by Leiv Method itself during that step.
+          <strong className="text-zinc-200">What we do claim.</strong> When lossless mode
+          succeeds, original video and audio are kept as-is during processing — no extra
+          quality loss from Leiv Method in that step. Apps you upload to later may still
+          re-encode on their side.
         </p>
         <p>
-          Built with Next.js, React, Tailwind CSS, Framer Motion, and FFmpeg.wasm.
+          Support the project:{" "}
+          <a
+            href="https://www.tiktok.com/@vennngod1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-300 hover:underline"
+          >
+            follow @vennngod1 on TikTok
+          </a>
+          .
         </p>
       </div>
     </div>
