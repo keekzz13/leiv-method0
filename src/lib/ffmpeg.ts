@@ -6,11 +6,15 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
 
+const CORE_URLS = [
+  "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm",
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm",
+];
+
 export async function getFFmpeg(
   onProgress?: (ratio: number) => void
 ): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
-
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
@@ -18,23 +22,36 @@ export async function getFFmpeg(
     if (onProgress) {
       ffmpeg.on("progress", ({ progress }) => onProgress(progress));
     }
-    ffmpeg.on("log", ({ message }) => {
-      if (process.env.NODE_ENV === "development") {
-        console.debug("[optimizer]", message);
+
+    let lastError: unknown = null;
+
+    for (const baseURL of CORE_URLS) {
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(
+            `${baseURL}/ffmpeg-core.js`,
+            "text/javascript"
+          ),
+          wasmURL: await toBlobURL(
+            `${baseURL}/ffmpeg-core.wasm`,
+            "application/wasm"
+          ),
+        });
+        ffmpegInstance = ffmpeg;
+        return ffmpeg;
+      } catch (e) {
+        lastError = e;
       }
-    });
+    }
 
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(
-        `${baseURL}/ffmpeg-core.wasm`,
-        "application/wasm"
-      ),
-    });
-
-    ffmpegInstance = ffmpeg;
-    return ffmpeg;
+    loadingPromise = null;
+    const detail =
+      lastError instanceof Error
+        ? lastError.message
+        : "Could not load the optimizer engine";
+    throw new Error(
+      `Optimizer failed to start. Check your connection or try another browser. (${detail})`
+    );
   })();
 
   return loadingPromise;
@@ -121,7 +138,7 @@ export async function probeFile(
   try {
     await ffmpeg.exec(["-hide_banner", "-i", name, "-f", "null", "-"]);
   } catch {
-    // analysis may exit non-zero; logs still useful
+    // analysis may exit non-zero
   }
 
   ffmpeg.off("log", logHandler);
@@ -310,84 +327,136 @@ export async function optimizeMp4(
     onLog(m);
   };
 
-  const ffmpeg = await getFFmpeg(onProgress);
-  const inputName = "input.mp4";
-  const outputName = "output.mp4";
+  try {
+    const ffmpeg = await getFFmpeg(onProgress);
+    const inputName = "input.mp4";
+    const outputName = "output.mp4";
 
-  log("[·] Preparing optimizer…");
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
-  log("[✓] File loaded on this device");
+    log("[·] Preparing optimizer…");
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    log("[✓] File loaded on this device");
 
-  let streamCopyUsed = false;
-  let videoEncoderUsed: string | undefined;
-  let success = false;
+    let streamCopyUsed = false;
+    let videoEncoderUsed: string | undefined;
+    let success = false;
 
-  if (mode === "lossless") {
-    log("[·] Running lossless optimization…");
-    try {
-      await ffmpeg.exec([
-        "-i",
+    if (mode === "lossless") {
+      log("[·] Running lossless optimization…");
+      try {
+        await ffmpeg.exec([
+          "-i",
+          inputName,
+          "-map",
+          "0",
+          "-c",
+          "copy",
+          "-movflags",
+          "+faststart",
+          "-y",
+          outputName,
+        ]);
+        streamCopyUsed = true;
+        success = true;
+        log("[✓] Lossless optimization succeeded");
+      } catch {
+        log("[!] Lossless mode isn’t possible for this file");
+        try {
+          await ffmpeg.deleteFile(inputName);
+        } catch {
+          // ignore
+        }
+        return {
+          blob: new Blob(),
+          mode,
+          streamCopyUsed: false,
+          fastStartVerified: false,
+          outputSize: 0,
+          logs,
+          error:
+            "Lossless optimization isn’t possible for this file. Try Compatibility mode if you’re okay with possible quality changes.",
+        };
+      }
+    } else {
+      log("[·] Compatibility mode — may change quality");
+      const result = await runCompatibilityEncode(
+        ffmpeg,
         inputName,
-        "-map",
-        "0",
-        "-c",
-        "copy",
-        "-movflags",
-        "+faststart",
-        "-y",
         outputName,
-      ]);
-      streamCopyUsed = true;
+        log
+      );
+      if (!result.ok) {
+        try {
+          await ffmpeg.deleteFile(inputName);
+        } catch {
+          // ignore
+        }
+        return {
+          blob: new Blob(),
+          mode,
+          streamCopyUsed: false,
+          fastStartVerified: false,
+          outputSize: 0,
+          logs,
+          error:
+            "Compatibility processing failed for this file. The original was not modified.",
+        };
+      }
       success = true;
-      log("[✓] Lossless optimization succeeded");
-    } catch {
-      log("[!] Lossless mode isn’t possible for this file");
-      try {
-        await ffmpeg.deleteFile(inputName);
-      } catch {
-        // ignore
-      }
-      return {
-        blob: new Blob(),
-        mode,
-        streamCopyUsed: false,
-        fastStartVerified: false,
-        outputSize: 0,
-        logs,
-        error:
-          "Lossless optimization isn’t possible for this file. Try Compatibility mode if you’re okay with possible quality changes.",
-      };
+      videoEncoderUsed = result.encoder;
     }
-  } else {
-    log("[·] Compatibility mode — may change quality");
-    const result = await runCompatibilityEncode(
-      ffmpeg,
-      inputName,
-      outputName,
-      log
-    );
-    if (!result.ok) {
-      try {
-        await ffmpeg.deleteFile(inputName);
-      } catch {
-        // ignore
-      }
-      return {
-        blob: new Blob(),
-        mode,
-        streamCopyUsed: false,
-        fastStartVerified: false,
-        outputSize: 0,
-        logs,
-        error:
-          "Compatibility processing failed for this file. The original was not modified.",
-      };
-    }
-    success = true;
-    videoEncoderUsed = result.encoder;
-  }
 
-  if (!success) {
+    if (!success) {
+      return {
+        blob: new Blob(),
+        mode,
+        streamCopyUsed: false,
+        fastStartVerified: false,
+        outputSize: 0,
+        logs,
+        error: "Something went wrong. Please try again.",
+      };
+    }
+
+    log("[·] Finalizing output…");
+    const data = await ffmpeg.readFile(outputName);
+    const uint8 =
+      data instanceof Uint8Array
+        ? data
+        : new TextEncoder().encode(String(data));
+
+    const fastStartVerified = verifyFastStart(uint8);
+    if (fastStartVerified) {
+      log("[✓] Quick-start playback layout verified");
+    } else {
+      log("[!] Quick-start layout not confirmed");
+    }
+
+    const bytes = new Uint8Array(uint8.byteLength);
+    bytes.set(uint8);
+    const blob = new Blob([bytes], { type: "video/mp4" });
+    log(`[✓] Ready to download (${formatBytes(blob.size)})`);
+
+    try {
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    } catch {
+      // ignore
+    }
+
+    return {
+      blob,
+      mode,
+      streamCopyUsed,
+      fastStartVerified,
+      videoEncoderUsed,
+      outputSize: blob.size,
+      logs,
+    };
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error
+        ? e.message
+        : "Something went wrong while optimizing.";
     return {
       blob: new Blob(),
       mode,
@@ -395,45 +464,9 @@ export async function optimizeMp4(
       fastStartVerified: false,
       outputSize: 0,
       logs,
-      error: "Something went wrong. Please try again.",
+      error: msg,
     };
   }
-
-  log("[·] Finalizing output…");
-  const data = await ffmpeg.readFile(outputName);
-  const uint8 =
-    data instanceof Uint8Array
-      ? data
-      : new TextEncoder().encode(String(data));
-
-  const fastStartVerified = verifyFastStart(uint8);
-  if (fastStartVerified) {
-    log("[✓] Quick-start playback layout verified");
-  } else {
-    log("[!] Quick-start layout not confirmed");
-  }
-
-  const bytes = new Uint8Array(uint8.byteLength);
-  bytes.set(uint8);
-  const blob = new Blob([bytes], { type: "video/mp4" });
-  log(`[✓] Ready to download (${formatBytes(blob.size)})`);
-
-  try {
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
-  } catch {
-    // ignore
-  }
-
-  return {
-    blob,
-    mode,
-    streamCopyUsed,
-    fastStartVerified,
-    videoEncoderUsed,
-    outputSize: blob.size,
-    logs,
-  };
 }
 
 function formatBytes(n: number) {
