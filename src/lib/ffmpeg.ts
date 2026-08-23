@@ -1,17 +1,41 @@
 "use client";
 
+/**
+ * Leiv Method — browser FFmpeg loader
+ *
+ * Multi-thread path: @ffmpeg/core-mt + workerURL + SharedArrayBuffer
+ *   → uses navigator.hardwareConcurrency threads (no mobile cap)
+ * Single-thread fallback: @ffmpeg/core when SAB / isolation unavailable
+ *
+ * All processing stays in the browser. No server upload.
+ */
+
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
 let usingMultiThread = false;
+let loadedThreadCount = 1;
 
 export function isMultiThreadActive() {
   return usingMultiThread;
 }
 
-function hasSharedArrayBuffer() {
+export function getLoadedThreadCount() {
+  return loadedThreadCount;
+}
+
+/** True when the page is cross-origin isolated (SAB available for MT WASM). */
+export function isCrossOriginIsolated(): boolean {
+  try {
+    return typeof crossOriginIsolated !== "undefined" && crossOriginIsolated;
+  } catch {
+    return false;
+  }
+}
+
+export function hasSharedArrayBuffer(): boolean {
   try {
     return typeof SharedArrayBuffer !== "undefined";
   } catch {
@@ -19,16 +43,21 @@ function hasSharedArrayBuffer() {
   }
 }
 
-/**
- * Bulletproof File/Blob → Uint8Array.
- * Never uses fetchFile for local Files (that path throws Code=-1 on many browsers).
- */
+/** Max threads this device/browser exposes — no artificial mobile limit. */
+export function maxThreadCount(): number {
+  try {
+    const n = navigator.hardwareConcurrency;
+    if (typeof n === "number" && n >= 1) return Math.floor(n);
+  } catch {
+    // ignore
+  }
+  return 4;
+}
+
 function readBlobAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  // 1) Native
   if (typeof blob.arrayBuffer === "function") {
     return blob.arrayBuffer();
   }
-  // 2) FileReader
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => {
@@ -44,37 +73,29 @@ function readBlobAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
   });
 }
 
+/** Local File → Uint8Array without fetchFile (avoids Code=-1). */
 async function fileToUint8(file: File | Blob): Promise<Uint8Array> {
   if (!file || file.size === 0) {
     throw new Error("This file is empty or invalid. Pick another MP4.");
   }
-
-  // Soft size warning path still attempts read (WASM may OOM later)
   const size = file.size;
 
-  // A) Full arrayBuffer
   try {
     const buf = await readBlobAsArrayBuffer(file);
-    if (buf && buf.byteLength > 0) {
-      return new Uint8Array(buf);
-    }
+    if (buf?.byteLength > 0) return new Uint8Array(buf);
   } catch {
     // continue
   }
 
-  // B) Full slice
   try {
     const buf = await readBlobAsArrayBuffer(file.slice(0, size));
-    if (buf && buf.byteLength > 0) {
-      return new Uint8Array(buf);
-    }
+    if (buf?.byteLength > 0) return new Uint8Array(buf);
   } catch {
     // continue
   }
 
-  // C) Chunked read (helps flaky mobile / cloud-drive File handles)
   try {
-    const chunkSize = 4 * 1024 * 1024; // 4MB
+    const chunkSize = 4 * 1024 * 1024;
     const out = new Uint8Array(size);
     let offset = 0;
     while (offset < size) {
@@ -91,13 +112,11 @@ async function fileToUint8(file: File | Blob): Promise<Uint8Array> {
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(
-      `Could not read this video (${detail}). Tips: use Chrome/Edge, download the file fully to device first (not cloud-only), re-export as MP4, or try a smaller clip.`
+      `Could not read this video (${detail}). Tips: Chrome/Edge, fully download the file to device, re-export MP4, or try a smaller clip.`
     );
   }
 
-  throw new Error(
-    "Could not read this video (empty data). Re-save as MP4 and try again."
-  );
+  throw new Error("Could not read this video (empty data).");
 }
 
 type LoadAttempt = {
@@ -106,12 +125,26 @@ type LoadAttempt = {
   run: (ffmpeg: FFmpeg) => Promise<void>;
 };
 
-async function loadSingle(
+/** Multi-thread core: needs core + wasm + worker (Web Worker pool). */
+async function loadMultiThread(ffmpeg: FFmpeg, base: string) {
+  const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript");
+  const wasmURL = await toBlobURL(
+    `${base}/ffmpeg-core.wasm`,
+    "application/wasm"
+  );
+  const workerURL = await toBlobURL(
+    `${base}/ffmpeg-core.worker.js`,
+    "text/javascript"
+  );
+  await ffmpeg.load({ coreURL, wasmURL, workerURL });
+}
+
+async function loadSingleThread(
   ffmpeg: FFmpeg,
   base: string,
-  kind: "umd" | "esm" | "direct"
+  mode: "blob" | "direct"
 ) {
-  if (kind === "direct") {
+  if (mode === "direct") {
     await ffmpeg.load({
       coreURL: `${base}/ffmpeg-core.js`,
       wasmURL: `${base}/ffmpeg-core.wasm`,
@@ -126,30 +159,18 @@ async function loadSingle(
   await ffmpeg.load({ coreURL, wasmURL });
 }
 
-async function loadMulti(ffmpeg: FFmpeg, base: string) {
-  const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript");
-  const wasmURL = await toBlobURL(
-    `${base}/ffmpeg-core.wasm`,
-    "application/wasm"
-  );
-  const workerURL = await toBlobURL(
-    `${base}/ffmpeg-core.worker.js`,
-    "text/javascript"
-  );
-  await ffmpeg.load({ coreURL, wasmURL, workerURL });
-}
-
-function buildAttempts(): LoadAttempt[] {
+function buildLoadAttempts(): LoadAttempt[] {
   const list: LoadAttempt[] = [];
+  const canMt = hasSharedArrayBuffer() && isCrossOriginIsolated();
 
-  // Multi-thread first when SharedArrayBuffer is available (uses more CPU cores)
-  if (hasSharedArrayBuffer()) {
+  // Prefer multi-thread whenever isolation + SAB exist
+  if (canMt) {
     list.push(
       {
         name: "core-mt-jsdelivr-esm",
         multi: true,
         run: (f) =>
-          loadMulti(
+          loadMultiThread(
             f,
             "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/esm"
           ),
@@ -158,49 +179,65 @@ function buildAttempts(): LoadAttempt[] {
         name: "core-mt-unpkg-esm",
         multi: true,
         run: (f) =>
-          loadMulti(f, "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"),
+          loadMultiThread(
+            f,
+            "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+          ),
+      },
+      {
+        name: "core-mt-jsdelivr-umd",
+        multi: true,
+        run: (f) =>
+          loadMultiThread(
+            f,
+            "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd"
+          ),
       }
     );
   }
 
-  // Single-thread fallbacks
+  // Always keep single-thread fallbacks
   list.push(
     {
-      name: "local-umd",
+      name: "local-st-umd",
       multi: false,
-      run: (f) => loadSingle(f, "/ffmpeg", "umd"),
+      run: (f) => loadSingleThread(f, "/ffmpeg", "blob"),
     },
     {
-      name: "core-jsdelivr-umd-blob",
+      name: "core-st-jsdelivr-umd-blob",
       multi: false,
       run: (f) =>
-        loadSingle(
+        loadSingleThread(
           f,
           "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd",
-          "umd"
+          "blob"
         ),
     },
     {
-      name: "core-unpkg-umd-blob",
+      name: "core-st-unpkg-umd-blob",
       multi: false,
       run: (f) =>
-        loadSingle(f, "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd", "umd"),
+        loadSingleThread(
+          f,
+          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd",
+          "blob"
+        ),
     },
     {
-      name: "core-jsdelivr-esm-blob",
+      name: "core-st-jsdelivr-esm-blob",
       multi: false,
       run: (f) =>
-        loadSingle(
+        loadSingleThread(
           f,
           "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm",
-          "esm"
+          "blob"
         ),
     },
     {
-      name: "core-jsdelivr-umd-direct",
+      name: "core-st-jsdelivr-umd-direct",
       multi: false,
       run: (f) =>
-        loadSingle(
+        loadSingleThread(
           f,
           "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd",
           "direct"
@@ -219,7 +256,7 @@ export async function getFFmpeg(
 
   loadingPromise = (async () => {
     const errors: string[] = [];
-    const attempts = buildAttempts();
+    const attempts = buildLoadAttempts();
 
     for (const attempt of attempts) {
       const ffmpeg = new FFmpeg();
@@ -232,6 +269,7 @@ export async function getFFmpeg(
         if (ffmpeg.loaded) {
           ffmpegInstance = ffmpeg;
           usingMultiThread = attempt.multi;
+          loadedThreadCount = attempt.multi ? maxThreadCount() : 1;
           return ffmpeg;
         }
         errors.push(`${attempt.name}: loaded=false`);
@@ -243,7 +281,7 @@ export async function getFFmpeg(
 
     loadingPromise = null;
     throw new Error(
-      `Engine could not start. Try Chrome/Edge, disable ad-block. Details: ${errors.slice(0, 3).join(" | ")}`
+      `FFmpeg engine could not start. Try Chrome/Edge, hard-refresh after deploy. Details: ${errors.slice(0, 4).join(" | ")}`
     );
   })();
 
@@ -259,6 +297,7 @@ export async function resetFFmpeg(): Promise<void> {
   ffmpegInstance = null;
   loadingPromise = null;
   usingMultiThread = false;
+  loadedThreadCount = 1;
 }
 
 export interface MediaInfo {
@@ -424,34 +463,34 @@ export interface OptimizeResult {
   fastStartVerified: boolean;
   videoEncoderUsed?: string;
   multiThread?: boolean;
+  threadCount?: number;
   outputSize: number;
   logs: string[];
   error?: string;
 }
 
-/**
- * Fast + max quality for TikTok:
- * - Keep 60 fps (not 30)
- * - High bitrate (15 Mbps) so TikTok has more data after re-encode
- * - ultrafast preset = fastest x264 in WASM (still quality via bitrate)
- * - Threads when multi-core core is loaded
- */
+/** FFmpeg thread flags: 0 = auto = use all available cores (no mobile limit). */
+function threadArgs(): string[] {
+  if (!usingMultiThread) return [];
+  // -threads 0 → libx264 uses all cores the MT core exposes
+  return ["-threads", "0"];
+}
+
 async function runTikTokEncode(
   ffmpeg: FFmpeg,
   inputName: string,
   outputName: string,
   log: (m: string) => void
 ): Promise<{ ok: boolean; encoder?: string }> {
-  const threads = usingMultiThread ? ["-threads", "0"] : []; // 0 = auto all cores
+  const th = threadArgs();
 
   const attempts: { label: string; args: string[] }[] = [
     {
-      // Primary: FAST + MAX QUALITY (high bitrate, 60fps, ultrafast)
       label: "fast-max-1080p60",
       args: [
         "-i",
         inputName,
-        ...threads,
+        ...th,
         "-vf",
         "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=60",
         "-c:v",
@@ -485,12 +524,11 @@ async function runTikTokEncode(
       ],
     },
     {
-      // Same quality target, no pad (if pad filter fails)
       label: "fast-max-scale-60",
       args: [
         "-i",
         inputName,
-        ...threads,
+        ...th,
         "-vf",
         "scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease,fps=60",
         "-c:v",
@@ -520,12 +558,11 @@ async function runTikTokEncode(
       ],
     },
     {
-      // High bitrate, keep source fps if 60 filter fails
       label: "fast-max-nobr-force",
       args: [
         "-i",
         inputName,
-        ...threads,
+        ...th,
         "-c:v",
         "libx264",
         "-preset",
@@ -555,7 +592,7 @@ async function runTikTokEncode(
       args: [
         "-i",
         inputName,
-        ...threads,
+        ...th,
         "-c:v",
         "libx264",
         "-preset",
@@ -600,7 +637,6 @@ async function runTikTokEncode(
       // ignore
     }
   }
-
   return { ok: false };
 }
 
@@ -610,14 +646,14 @@ async function runCompatibilityEncode(
   outputName: string,
   log: (m: string) => void
 ): Promise<{ ok: boolean; encoder?: string }> {
-  const threads = usingMultiThread ? ["-threads", "0"] : [];
+  const th = threadArgs();
   const attempts: { label: string; args: string[] }[] = [
     {
       label: "standard",
       args: [
         "-i",
         inputName,
-        ...threads,
+        ...th,
         "-c:v",
         "libx264",
         "-preset",
@@ -673,17 +709,23 @@ export async function optimizeMp4(
 
   try {
     log("[·] Preparing Leiv Method…");
+    log(
+      `[·] Isolation: ${isCrossOriginIsolated() ? "yes" : "no"} · SAB: ${hasSharedArrayBuffer() ? "yes" : "no"} · cores: ${maxThreadCount()}`
+    );
+
     const ffmpeg = await getFFmpeg(onProgress);
 
     if (usingMultiThread) {
-      log("[✓] Multi-core engine active (uses more CPU — faster encode)");
+      log(
+        `[✓] Multi-thread WASM active — using up to ${loadedThreadCount} CPU threads (Web Workers)`
+      );
     } else {
       log(
-        "[!] Single-core engine (browser limit). Encode feels slow but PC stays smooth — normal for WASM."
+        "[!] Single-thread fallback (this browser/page is not cross-origin isolated, or MT core failed to load)"
       );
-      if (!hasSharedArrayBuffer()) {
+      if (!isCrossOriginIsolated()) {
         log(
-          "[!] SharedArrayBuffer missing — multi-core needs Chrome/Edge + site headers. Deploy with COOP/COEP."
+          "[!] crossOriginIsolated=false — deploy next.config COOP/COEP headers, then hard-refresh"
         );
       }
     }
@@ -713,6 +755,7 @@ export async function optimizeMp4(
         streamCopyUsed: false,
         fastStartVerified: false,
         multiThread: usingMultiThread,
+        threadCount: loadedThreadCount,
         outputSize: 0,
         logs,
         error:
@@ -760,6 +803,7 @@ export async function optimizeMp4(
           streamCopyUsed: false,
           fastStartVerified: false,
           multiThread: usingMultiThread,
+          threadCount: loadedThreadCount,
           outputSize: 0,
           logs,
           error: "Lossless isn’t possible. Try Leiv Method instead.",
@@ -782,6 +826,7 @@ export async function optimizeMp4(
           streamCopyUsed: false,
           fastStartVerified: false,
           multiThread: usingMultiThread,
+          threadCount: loadedThreadCount,
           outputSize: 0,
           logs,
           error:
@@ -810,6 +855,7 @@ export async function optimizeMp4(
           streamCopyUsed: false,
           fastStartVerified: false,
           multiThread: usingMultiThread,
+          threadCount: loadedThreadCount,
           outputSize: 0,
           logs,
           error: "Compatibility failed. Original not modified.",
@@ -826,6 +872,7 @@ export async function optimizeMp4(
         streamCopyUsed: false,
         fastStartVerified: false,
         multiThread: usingMultiThread,
+        threadCount: loadedThreadCount,
         outputSize: 0,
         logs,
         error: "Something went wrong.",
@@ -849,6 +896,7 @@ export async function optimizeMp4(
         streamCopyUsed: false,
         fastStartVerified: false,
         multiThread: usingMultiThread,
+        threadCount: loadedThreadCount,
         outputSize: 0,
         logs,
         error: `Could not read output (${e instanceof Error ? e.message : e}).`,
@@ -867,6 +915,7 @@ export async function optimizeMp4(
         streamCopyUsed: false,
         fastStartVerified: false,
         multiThread: usingMultiThread,
+        threadCount: loadedThreadCount,
         outputSize: 0,
         logs,
         error: "Output was empty. Try another clip.",
@@ -898,6 +947,7 @@ export async function optimizeMp4(
       fastStartVerified,
       videoEncoderUsed,
       multiThread: usingMultiThread,
+      threadCount: loadedThreadCount,
       outputSize: blob.size,
       logs,
     };
@@ -913,6 +963,7 @@ export async function optimizeMp4(
       streamCopyUsed: false,
       fastStartVerified: false,
       multiThread: usingMultiThread,
+      threadCount: loadedThreadCount,
       outputSize: 0,
       logs,
       error:
