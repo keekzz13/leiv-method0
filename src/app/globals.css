@@ -59,7 +59,7 @@ body {
 
 .glow-btn {
   box-shadow: 0 0 20px -4px rgba(167, 139, 250, 0.4);
-  transition: box-shadow 0.25s ease, background-color 0.2s ease, transform 0.15s ease;
+  transition: box-shadow 0.4s ease, background-color 0.3s ease, transform 0.25s ease;
 }
 
 .glow-btn:hover {
@@ -77,16 +77,16 @@ body {
   background-clip: text;
 }
 
-/* Smoother interactions */
+/* Smoother / slower interactions */
 a,
 button {
   transition:
-    color 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.25s ease,
-    transform 0.15s ease,
-    opacity 0.2s ease;
+    color 0.35s ease,
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.4s ease,
+    transform 0.25s ease,
+    opacity 0.35s ease;
 }
 
 button:active,
@@ -95,18 +95,84 @@ a:active {
 }
 
 main {
-  animation: pageIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageIn 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes pageIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Moving light across navbar */
+@keyframes headerLightSweep {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.header-light-sweep {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(167, 139, 250, 0.08) 45%,
+    rgba(196, 181, 253, 0.22) 50%,
+    rgba(167, 139, 250, 0.08) 55%,
+    transparent 65%,
+    transparent 100%
+  );
+  animation: headerLightSweep 4.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #0c0c14 25%, #14141f 50%, #0c0c14 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2.2s infinite;
+  border-radius: 8px;
+}
+
+/* Progress bar soft pulse when waiting for real encode progress */
+@keyframes progressPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.progress-waiting {
+  animation: progressPulse 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -119,6 +185,11 @@ main {
 
   main {
     animation: none;
+  }
+
+  .header-light-sweep {
+    animation: none;
+    opacity: 0.15;
   }
 }
 
@@ -141,19 +212,3 @@ main {
   background: rgba(167, 139, 250, 0.3);
   color: white;
 }
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.skeleton {
-  background: linear-gradient(90deg, #0c0c14 25%, #14141f 50%, #0c0c14 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-                   }
