@@ -382,8 +382,16 @@ export default function OptimizerPage() {
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-zinc-500">Fast-start</dt>
-                      <dd className="text-zinc-200">Applied</dd>
+                      <dd className="text-zinc-200">
+                        {result.fastStartVerified ? "Verified" : "Not confirmed"}
+                      </dd>
                     </div>
+                    {result.videoEncoderUsed && (
+                      <div className="flex justify-between">
+                        <dt className="text-zinc-500">Encoder</dt>
+                        <dd className="text-zinc-200">{result.videoEncoderUsed}</dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               </div>
