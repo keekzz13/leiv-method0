@@ -14,25 +14,25 @@ export function Footer() {
             href="https://www.tiktok.com/@vennngod1"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-200 duration-500 ease-out hover:border-white/25 hover:bg-white/10 hover:text-white"
           >
             Support — Follow @vennngod1
           </a>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-zinc-400">
-          <Link href="/optimizer" className="transition-colors hover:text-white">
+          <Link href="/optimizer" className="duration-500 ease-out hover:text-white">
             Optimizer
           </Link>
-          <Link href="/how-it-works" className="transition-colors hover:text-white">
+          <Link href="/how-it-works" className="duration-500 ease-out hover:text-white">
             How It Works
           </Link>
-          <Link href="/faq" className="transition-colors hover:text-white">
+          <Link href="/faq" className="duration-500 ease-out hover:text-white">
             FAQ
           </Link>
-          <Link href="/privacy" className="transition-colors hover:text-white">
+          <Link href="/privacy" className="duration-500 ease-out hover:text-white">
             Privacy
           </Link>
-          <Link href="/about" className="transition-colors hover:text-white">
+          <Link href="/about" className="duration-500 ease-out hover:text-white">
             About
           </Link>
         </div>
