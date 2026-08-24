@@ -269,7 +269,7 @@ export default function OptimizerPage() {
             className={`cursor-pointer rounded-3xl border-2 border-dashed p-12 text-center transition-all ${
               dragOver
                 ? "border-white/40 bg-white/5"
-                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                : "border-white/10 bg-white/[0.02] duration-500 ease-out hover:border-white/20 hover:bg-white/[0.04]"
             }`}
           >
             <input
@@ -351,7 +351,7 @@ export default function OptimizerPage() {
                 <button
                   type="button"
                   onClick={reset}
-                  className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
+                  className="rounded-lg p-2 text-zinc-500 duration-500 ease-out hover:bg-white/5 hover:text-white"
                 >
                   <RotateCcw size={16} />
                 </button>
@@ -381,7 +381,7 @@ export default function OptimizerPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease }}
               onClick={startPatch}
-              className="w-full rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-100"
+              className="w-full rounded-2xl bg-white py-4 text-sm font-semibold text-black duration-500 ease-out hover:bg-zinc-100"
             >
               Patch File
             </motion.button>
@@ -442,7 +442,7 @@ export default function OptimizerPage() {
                 download={
                   fileName.replace(/\.(mp4|mov|m4v)$/i, "") + "_leiv.mp4"
                 }
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-100"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm font-semibold text-black duration-500 ease-out hover:bg-zinc-100"
               >
                 <Download size={16} />
                 Download Patched File
