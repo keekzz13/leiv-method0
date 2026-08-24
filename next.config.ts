@@ -8,12 +8,29 @@ const nextConfig: NextConfig = {
       path: false,
       crypto: false,
     };
+    // ffmpeg.wasm worker support
+    config.resolutions = config.resolutions;
     return config;
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // No COOP / COEP headers — not needed anymore (no FFmpeg.wasm)
+  // Helps FFmpeg.wasm (SharedArrayBuffer) on some browsers.
+  // credentialless is safer than require-corp for external CDNs.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "credentialless",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
