@@ -1,27 +1,17 @@
 "use client";
 
 /**
- * Leiv Method – standards-compliant MP4 container optimizer
+ * Zilem / original Leiv Method core
+ * Exact behavior restored from zilem.netlify.app (fake-sample inflation).
  *
- * Goals:
- *  - Leave every encoded video/audio sample byte-for-byte untouched
- *  - No re-encoding
- *  - Preserve duration, timing, FPS, A/V sync
- *  - Produce a structurally valid ISO-BMFF file
- *  - Fast-start layout (moov before mdat) with correct chunk offsets
- *  - Strip non-essential atoms that some upload pipelines dislike
- *
- * What was removed from the previous implementation (and why):
- *  - Inflating stsz sample_count to ~6.67× original
- *  - Appending only one 8-byte fake sample while claiming many
- *  - Adding many stco/co64 entries that all point at the same address
- *  - Leaving stts unchanged while changing stsz/stsc
- *    → these produced internally inconsistent sample tables.
- *      Parsers that trust stsz.sample_count then discover that
- *      stts, stsc and the actual mdat bytes disagree.  Upload
- *      platforms fall into a slow “repair / full re-index /
- *      suspicious-file” path, which is exactly the delay you saw.
+ * targetCount = floor(originalSamples * 20 / 3)
+ * Adds synthetic 8-byte samples, patches stsz / stsc / stco|co64,
+ * leaves stts unchanged, appends one FAKE_SAMPLE to mdat.
  */
+
+const FAKE_SAMPLE = new Uint8Array([
+  0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
+]);
 
 const CONTAINERS = new Set([
   "moov",
@@ -36,7 +26,7 @@ const CONTAINERS = new Set([
   "mvex",
 ]);
 
-// ─── binary helpers ───────────────────────────────────────────────────────────
+// ── binary helpers ───────────────────────────────────────────────────────────
 
 const dv = (buf: ArrayBuffer | Uint8Array) =>
   new DataView(
@@ -86,16 +76,16 @@ function concat(...bufs: Uint8Array[]) {
   return out;
 }
 
-// ─── box model ────────────────────────────────────────────────────────────────
+// ── box model ────────────────────────────────────────────────────────────────
 
 class Box {
+  children: Box[] | null = null;
   constructor(
     public type: string,
     public start: number,
     public end: number,
     public size: number,
-    public header: number,
-    public children: Box[] | null = null
+    public header: number
   ) {}
 }
 
@@ -116,7 +106,7 @@ function parseBoxes(data: Uint8Array, start: number, end: number): Box[] {
     const btype = asciiSlice(data, pos + 4, 4);
     const b = new Box(btype, pos, pos + boxSize, boxSize, hdr);
     let childStart = pos + hdr;
-    if (btype === "meta") childStart += 4; // version+flags
+    if (btype === "meta") childStart += 4;
     if (CONTAINERS.has(btype) && childStart < pos + boxSize) {
       b.children = parseBoxes(data, childStart, pos + boxSize);
     }
@@ -153,21 +143,19 @@ function stszInfo(data: Uint8Array, b: Box) {
   return { sampleSize: u32(p, 4), count: u32(p, 8) };
 }
 
-// ─── lightweight, standards-safe patches ──────────────────────────────────────
+// ── patches (Zilem / original behavior) ──────────────────────────────────────
 
-/** Normalize media language code (und = 0x55C4). Harmless, keeps some probes happy. */
 function patchMdhd(data: Uint8Array, b: Box) {
   const p = new Uint8Array(payload(data, b));
   const langOff = p[0] === 1 ? 28 : 16;
   if (langOff + 2 <= p.length) {
-    // 0x55C4 = "und"
-    p[langOff] = 0x55;
-    p[langOff + 1] = 0xc4;
+    // original Zilem value 21956
+    p[langOff] = (21956 >> 8) & 0xff;
+    p[langOff + 1] = 21956 & 0xff;
   }
   return makeBox("mdhd", p);
 }
 
-/** Give video/audio handlers canonical names. Does not change sample data. */
 function patchHdlr(data: Uint8Array, b: Box) {
   const p = payload(data, b);
   if (p.length < 12) return rawBox(data, b);
@@ -179,192 +167,301 @@ function patchHdlr(data: Uint8Array, b: Box) {
   const newP = new Uint8Array(24 + name.length + 1);
   newP.set(p.slice(0, 24), 0);
   for (let i = 0; i < name.length; i++) newP[24 + i] = name.charCodeAt(i);
-  // trailing NUL already zero-filled
   return makeBox("hdlr", newP);
 }
 
-/**
- * Rewrite every chunk offset by a constant delta.
- * This is the only change required when the absolute position of mdat moves
- * (fast-start reorder or removal of free/skip atoms).
- * Sample counts, sizes and timing tables are left completely untouched.
- */
-function patchChunkOffsets(
+function patchStsz(data: Uint8Array, b: Box, fakeCount: number) {
+  if (fakeCount < 1) return rawBox(data, b);
+  const p = payload(data, b);
+  const flagsVer = p.slice(0, 4);
+  const sampleSize = u32(p, 4);
+  const count = u32(p, 8);
+  const sizes: number[] = [];
+  if (sampleSize !== 0) {
+    for (let i = 0; i < count; i++) sizes.push(sampleSize);
+  } else {
+    let off = 12;
+    for (let i = 0; i < count && off + 4 <= p.length; i++, off += 4) {
+      sizes.push(u32(p, off));
+    }
+  }
+  for (let i = 0; i < fakeCount; i++) sizes.push(8);
+  const newP = new Uint8Array(12 + sizes.length * 4);
+  newP.set(flagsVer, 0);
+  newP.set(w32(0), 4); // force sample_size = 0 (table of sizes)
+  newP.set(w32(sizes.length), 8);
+  for (let i = 0; i < sizes.length; i++) {
+    newP.set(w32(sizes[i]), 12 + i * 4);
+  }
+  return makeBox("stsz", newP);
+}
+
+function patchStsc(data: Uint8Array, b: Box, totalChunks: number) {
+  if (totalChunks < 1) return rawBox(data, b);
+  const p = payload(data, b);
+  const flagsVer = p.slice(0, 4);
+  const entryCount = u32(p, 4);
+  const entries: [number, number, number][] = [];
+  let off = 8;
+  for (let i = 0; i < entryCount && off + 12 <= p.length; i++, off += 12) {
+    entries.push([u32(p, off), u32(p, off + 4), u32(p, off + 8)]);
+  }
+  const lastDesc = entries.length ? entries[entries.length - 1][2] : 1;
+  entries.push([totalChunks + 1, 1, lastDesc]);
+  const newP = new Uint8Array(8 + entries.length * 12);
+  newP.set(flagsVer, 0);
+  newP.set(w32(entries.length), 4);
+  for (let i = 0; i < entries.length; i++) {
+    const base = 8 + i * 12;
+    newP.set(w32(entries[i][0]), base);
+    newP.set(w32(entries[i][1]), base + 4);
+    newP.set(w32(entries[i][2]), base + 8);
+  }
+  return makeBox("stsc", newP);
+}
+
+function patchStco(
   data: Uint8Array,
   b: Box,
-  delta: number,
-  is64: boolean
+  moovDelta: number,
+  mdatPos: number,
+  fakeCount: number
 ) {
   const p = payload(data, b);
   const flagsVer = p.slice(0, 4);
   const entryCount = u32(p, 4);
-  const entrySize = is64 ? 8 : 4;
-  const newP = new Uint8Array(8 + entryCount * entrySize);
-  newP.set(flagsVer, 0);
-  newP.set(w32(entryCount), 4);
-
+  const offsets: number[] = [];
   let off = 8;
-  for (let i = 0; i < entryCount; i++) {
-    const old = is64 ? u64(p, off) : u32(p, off);
-    const next = old + delta;
-    if (is64) {
-      newP.set(w64(next), 8 + i * 8);
-    } else {
-      // If the new offset no longer fits in 32 bits we would need co64,
-      // but for typical files (<4 GiB) this never happens.
-      newP.set(w32(next >>> 0), 8 + i * 4);
-    }
-    off += entrySize;
+  for (let i = 0; i < entryCount && off + 4 <= p.length; i++, off += 4) {
+    offsets.push(u32(p, off) + moovDelta);
   }
-  return makeBox(is64 ? "co64" : "stco", newP);
+  for (let i = 0; i < fakeCount; i++) offsets.push(mdatPos);
+  const newP = new Uint8Array(8 + offsets.length * 4);
+  newP.set(flagsVer, 0);
+  newP.set(w32(offsets.length), 4);
+  for (let i = 0; i < offsets.length; i++) {
+    newP.set(w32(offsets[i]), 8 + i * 4);
+  }
+  return makeBox("stco", newP);
 }
 
-// ─── moov rebuild ─────────────────────────────────────────────────────────────
+function patchCo64(
+  data: Uint8Array,
+  b: Box,
+  moovDelta: number,
+  mdatPos: number,
+  fakeCount: number
+) {
+  const p = payload(data, b);
+  const flagsVer = p.slice(0, 4);
+  const entryCount = u32(p, 4);
+  const offsets: number[] = [];
+  let off = 8;
+  for (let i = 0; i < entryCount && off + 8 <= p.length; i++, off += 8) {
+    offsets.push(u64(p, off) + moovDelta);
+  }
+  for (let i = 0; i < fakeCount; i++) offsets.push(mdatPos);
+  const newP = new Uint8Array(8 + offsets.length * 8);
+  newP.set(flagsVer, 0);
+  newP.set(w32(offsets.length), 4);
+  for (let i = 0; i < offsets.length; i++) {
+    newP.set(w64(offsets[i]), 8 + i * 8);
+  }
+  return makeBox("co64", newP);
+}
 
-/**
- * Recursively rebuild a moov (or any container) subtree.
- * - Drops udta / free / uuid (non-essential, sometimes trigger extra scanning)
- * - Applies mdhd language + hdlr name normalizations
- * - Applies the constant offset delta to every stco / co64 (all tracks)
- * - Leaves stts, stsz, stsc, stss, ctts, … completely unchanged
- */
 function rebuildMoov(
   data: Uint8Array,
   node: Box,
-  delta: number
+  videoTrak: Box,
+  moovDelta: number,
+  mdatPos: number,
+  fakeCount: number,
+  currentTrak: [Box | null]
 ): Uint8Array | null {
   const btype = node.type;
-
-  // Strip atoms that are not required for playback and that some
-  // upload pipelines treat as “extra work”.
   if (btype === "udta" || btype === "free" || btype === "uuid") return null;
-
   if (btype === "mdhd") return patchMdhd(data, node);
   if (btype === "hdlr") return patchHdlr(data, node);
 
-  if (btype === "stco") return patchChunkOffsets(data, node, delta, false);
-  if (btype === "co64") return patchChunkOffsets(data, node, delta, true);
+  const isVideo = currentTrak[0] === videoTrak;
 
-  // Everything else that has children: rebuild recursively
+  if (isVideo && btype === "stsz") return patchStsz(data, node, fakeCount);
+  if (isVideo && btype === "stts") return rawBox(data, node); // left unchanged (Zilem behavior)
+
+  if (isVideo && btype === "stsc" && fakeCount > 0) {
+    const stbl = childPath(videoTrak, ["mdia", "minf", "stbl"]);
+    const offBox = stbl
+      ? findChild(stbl, "stco") || findChild(stbl, "co64")
+      : null;
+    const totChunks = offBox ? u32(payload(data, offBox), 4) : 0;
+    return patchStsc(data, node, totChunks);
+  }
+
+  if (btype === "stco")
+    return patchStco(data, node, moovDelta, mdatPos, fakeCount);
+  if (btype === "co64")
+    return patchCo64(data, node, moovDelta, mdatPos, fakeCount);
+
   if (node.children) {
     const parts: Uint8Array[] = [];
-    if (btype === "meta") {
-      // preserve version+flags that sit before the child boxes
-      parts.push(payload(data, node).slice(0, 4));
-    }
+    if (btype === "meta") parts.push(payload(data, node).slice(0, 4));
     for (const child of node.children) {
-      const rebuilt = rebuildMoov(data, child, delta);
+      const saved = currentTrak[0];
+      if (child.type === "trak") currentTrak[0] = child;
+      const rebuilt = rebuildMoov(
+        data,
+        child,
+        videoTrak,
+        moovDelta,
+        mdatPos,
+        fakeCount,
+        currentTrak
+      );
+      currentTrak[0] = saved;
       if (rebuilt !== null) parts.push(rebuilt);
     }
     return makeBox(btype, concat(...parts));
   }
-
-  // Leaf boxes we don’t specially handle – copy verbatim
   return rawBox(data, node);
 }
 
-// ─── public entry point ───────────────────────────────────────────────────────
+// ── public entry (identical to Zilem tikquickPatch) ──────────────────────────
 
 export function tikquickPatch(inputBytes: Uint8Array) {
-  const data = inputBytes;
-  const topBoxes = parseBoxes(data, 0, data.length);
+  const data =
+    inputBytes instanceof Uint8Array
+      ? inputBytes
+      : new Uint8Array(inputBytes as ArrayBuffer);
 
+  const topBoxes = parseBoxes(data, 0, data.length);
   let moov: Box | null = null;
   let mdat: Box | null = null;
-  let ftyp: Box | null = null;
-  const other: Box[] = [];
-
   for (const b of topBoxes) {
     if (b.type === "moov") moov = b;
     else if (b.type === "mdat") mdat = b;
-    else if (b.type === "ftyp") ftyp = b;
-    else if (!["free", "skip", "uuid"].includes(b.type)) other.push(b);
   }
-
   if (!moov || !mdat) throw new Error("Invalid MP4: missing moov or mdat");
-  if (!ftyp) throw new Error("Invalid MP4: missing ftyp");
 
-  // Optional diagnostics – original sample count (unchanged by this patcher)
   const traks = (moov.children || []).filter((c) => c.type === "trak");
-  let origSamples = 0;
+  let videoTrak: Box | null = null;
   for (const t of traks) {
-    if (!isVideoTrak(data, t)) continue;
-    const stbl = childPath(t, ["mdia", "minf", "stbl"]);
-    const stszBox = stbl ? findChild(stbl, "stsz") : null;
-    if (stszBox) origSamples = stszInfo(data, stszBox).count;
-    break;
+    if (isVideoTrak(data, t)) {
+      videoTrak = t;
+      break;
+    }
+  }
+  if (!videoTrak) throw new Error("No video track found");
+
+  const stbl = childPath(videoTrak, ["mdia", "minf", "stbl"]);
+  if (!stbl) throw new Error("Missing stbl");
+  const stszBox = findChild(stbl, "stsz");
+  const stscBox = findChild(stbl, "stsc");
+  const offBox = findChild(stbl, "stco") || findChild(stbl, "co64");
+  if (!stszBox || !stscBox || !offBox)
+    throw new Error("Missing sample tables");
+
+  const si = stszInfo(data, stszBox);
+  // ── Zilem formula ──
+  const targetCount = Math.floor((si.count * 20) / 3);
+  const fakeCount = Math.max(0, targetCount - si.count);
+  const ctRef: [Box | null] = [null];
+
+  let totalBeforeMdat = 0;
+  for (const b of topBoxes) {
+    if (b.type === "mdat") break;
+    if (b.type === "moov") {
+      ctRef[0] = null;
+      totalBeforeMdat += rebuildMoov(
+        data,
+        moov,
+        videoTrak,
+        0,
+        mdat.end,
+        fakeCount,
+        ctRef
+      )!.length;
+    } else if (!["free", "skip", "uuid"].includes(b.type)) {
+      totalBeforeMdat += rawBox(data, b).length;
+    }
   }
 
-  // ── 1. Measure the size of a rebuilt moov with delta = 0
-  //        (only structural changes: stripped atoms + mdhd/hdlr patches).
-  //        Chunk offsets are still the original absolute values at this stage.
-  const moovProbe = rebuildMoov(data, moov, 0)!;
-  const moovSize = moovProbe.length;
+  const finalDelta = totalBeforeMdat - mdat.start;
+  const finalMdatPos = mdat.end + finalDelta;
+  ctRef[0] = null;
+  const finalMoov = rebuildMoov(
+    data,
+    moov,
+    videoTrak,
+    finalDelta,
+    finalMdatPos,
+    fakeCount,
+    ctRef
+  )!;
 
-  // ── 2. Decide final layout: ftyp | other | moov | mdat   (classic fast-start)
-  const ftypBytes = rawBox(data, ftyp);
-  const otherBytes = other.map((b) => rawBox(data, b));
-  const otherTotal = otherBytes.reduce((s, b) => s + b.length, 0);
-
-  const sizeBeforeMdat = ftypBytes.length + otherTotal + moovSize;
-
-  // mdat header size in the *output* (same rule as original)
-  const mdatPayloadLen = mdat.end - (mdat.start + mdat.header);
-  const mdatHeaderSize = mdatPayloadLen + 8 > 0xffffffff ? 16 : 8;
-
-  const newMdatDataStart = sizeBeforeMdat + mdatHeaderSize;
-  const origMdatDataStart = mdat.start + mdat.header;
-  const delta = newMdatDataStart - origMdatDataStart;
-
-  // ── 3. Rebuild moov for real, now applying the constant offset delta
-  //        to every stco / co64 in every track.
-  const finalMoov = rebuildMoov(data, moov, delta)!;
-
-  // ── 4. Emit the new file
-  //        mdat payload is copied verbatim – zero quality loss.
-  let mdatOut: Uint8Array;
-  if (mdatHeaderSize === 16) {
-    const header = new Uint8Array(16);
-    header.set(w32(1), 0);
-    for (let i = 0; i < 4; i++) header[4 + i] = "mdat".charCodeAt(i);
-    header.set(w64(mdatPayloadLen + 16), 8);
-    mdatOut = concat(header, data.slice(mdat.start + mdat.header, mdat.end));
-  } else {
-    const header = new Uint8Array(8);
-    header.set(w32(mdatPayloadLen + 8), 0);
-    for (let i = 0; i < 4; i++) header[4 + i] = "mdat".charCodeAt(i);
-    mdatOut = concat(header, data.slice(mdat.start + mdat.header, mdat.end));
+  const parts: Uint8Array[] = [];
+  for (const b of topBoxes) {
+    if (b.type === "ftyp") {
+      parts.push(rawBox(data, b));
+    } else if (b.type === "moov") {
+      parts.push(finalMoov);
+    } else if (b.type === "mdat") {
+      const origMdat = rawBox(data, mdat);
+      if (fakeCount > 0) {
+        const newSize = origMdat.length + FAKE_SAMPLE.length;
+        let header: Uint8Array;
+        if (newSize > 0xffffffff) {
+          header = new Uint8Array(16);
+          header.set(w32(1), 0);
+          for (let i = 0; i < 4; i++) header[4 + i] = "mdat".charCodeAt(i);
+          header.set(w64(newSize), 8);
+        } else {
+          header = new Uint8Array(8);
+          header.set(w32(newSize), 0);
+          for (let i = 0; i < 4; i++) header[4 + i] = "mdat".charCodeAt(i);
+        }
+        const newMdat = new Uint8Array(newSize);
+        newMdat.set(header, 0);
+        newMdat.set(origMdat.slice(mdat.header), header.length);
+        newMdat.set(FAKE_SAMPLE, newSize - FAKE_SAMPLE.length);
+        parts.push(newMdat);
+      } else {
+        parts.push(origMdat);
+      }
+    } else if (!["free", "skip", "uuid"].includes(b.type)) {
+      parts.push(rawBox(data, b));
+    }
   }
-
-  const parts: Uint8Array[] = [ftypBytes, ...otherBytes, finalMoov, mdatOut];
-  const output = concat(...parts);
 
   return {
-    output,
-    fakeCount: 0, // no synthetic samples – tables stay consistent
+    output: concat(...parts),
+    fakeCount,
     moovSize: finalMoov.length,
-    origSamples,
+    origSamples: si.count,
   };
 }
 
-/** Robust File → Uint8Array (handles permission / mobile edge cases) */
+/** Robust File → Uint8Array */
 export async function fileToUint8(file: File): Promise<Uint8Array> {
   try {
     const buf = await file.arrayBuffer();
     if (buf && buf.byteLength > 0) return new Uint8Array(buf);
   } catch {
-    // fall through
+    /* fall through */
   }
   try {
     const buf = await file.slice(0, file.size).arrayBuffer();
     if (buf && buf.byteLength > 0) return new Uint8Array(buf);
   } catch {
-    // fall through
+    /* fall through */
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (reader.result instanceof ArrayBuffer && reader.result.byteLength > 0) {
+      if (
+        reader.result instanceof ArrayBuffer &&
+        reader.result.byteLength > 0
+      ) {
         resolve(new Uint8Array(reader.result));
       } else {
         reject(new Error("Could not read file"));
