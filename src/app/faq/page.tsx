@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+const ease = [0.22, 1, 0.36, 1] as const;
 
 const faqs = [
   {
@@ -34,53 +37,89 @@ export default function FaqPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 md:py-16">
-      <div className="mb-10 text-center">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.85, ease }}
+        className="mb-12 text-center"
+      >
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
           FAQ
         </h1>
         <p className="mt-3 text-sm text-zinc-400">
           99% Faster · No Encoding Needed · Always Free
         </p>
-      </div>
+      </motion.div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {faqs.map((item, i) => {
           const isOpen = open === i;
           return (
-            <div
+            <motion.div
               key={i}
-              className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.02]"
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.7, ease }}
+              className={`overflow-hidden rounded-2xl border duration-500 ease-out ${
+                isOpen
+                  ? "border-white/15 bg-white/[0.04]"
+                  : "border-white/8 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.035]"
+              }`}
             >
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : i)}
-                className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-medium text-white"
+                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
               >
-                {item.q}
-                <span className="ml-4 text-zinc-500">{isOpen ? "−" : "+"}</span>
+                <span className="text-sm font-medium text-white">{item.q}</span>
+                <motion.span
+                  animate={{ rotate: isOpen ? 45 : 0 }}
+                  transition={{ duration: 0.4, ease }}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm text-zinc-400"
+                >
+                  +
+                </motion.span>
               </button>
-              {isOpen && (
-                <div className="border-t border-white/5 px-5 pb-4 pt-3 text-sm leading-relaxed text-zinc-400">
-                  {item.a}
-                </div>
-              )}
-            </div>
+
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.45, ease }}
+                    className="overflow-hidden"
+                  >
+                    <div className="border-t border-white/5 px-5 pb-5 pt-3 text-sm leading-relaxed text-zinc-400">
+                      {item.a}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           );
         })}
       </div>
 
-      <p className="mt-10 text-center text-sm text-zinc-500">
+      <motion.p
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8, ease }}
+        className="mt-12 text-center text-sm text-zinc-500"
+      >
         100% support{" "}
         <a
           href="https://www.tiktok.com/@vennngod1"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-white underline underline-offset-4 hover:text-zinc-200"
+          className="text-white underline underline-offset-4 duration-500 ease-out hover:text-zinc-200"
         >
           @vennngod1
         </a>{" "}
         to continue
-      </p>
+      </motion.p>
     </div>
   );
 }
