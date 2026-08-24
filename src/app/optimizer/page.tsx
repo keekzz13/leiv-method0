@@ -130,7 +130,10 @@ export default function OptimizerPage() {
       });
 
       setProgress(100);
-      const blob = new Blob([result.output], { type: "video/mp4" });
+      // Plain ArrayBuffer-backed copy so Blob accepts it under strict TS DOM types
+      const out = new Uint8Array(result.output.byteLength);
+      out.set(result.output);
+      const blob = new Blob([out.buffer], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setOutSize(result.outputBytes);
