@@ -9,6 +9,9 @@
   --text-muted: #a1a1aa;
   --accent: #a78bfa;
   --glow: rgba(139, 92, 246, 0.35);
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-hover: 0.45s;
+  --duration-press: 0.35s;
 }
 
 * {
@@ -58,12 +61,16 @@ body {
 }
 
 .glow-btn {
-  box-shadow: 0 0 20px -4px rgba(167, 139, 250, 0.4);
-  transition: box-shadow 0.4s ease, background-color 0.3s ease, transform 0.25s ease;
+  box-shadow: 0 0 20px -4px rgba(167, 139, 250, 0.35);
+  transition:
+    box-shadow var(--duration-hover) var(--ease-smooth),
+    background-color var(--duration-hover) var(--ease-smooth),
+    transform var(--duration-press) var(--ease-smooth),
+    opacity var(--duration-hover) var(--ease-smooth);
 }
 
 .glow-btn:hover {
-  box-shadow: 0 0 28px -2px rgba(167, 139, 250, 0.55);
+  box-shadow: 0 0 28px -2px rgba(167, 139, 250, 0.5);
 }
 
 .glow-btn:active {
@@ -77,25 +84,69 @@ body {
   background-clip: text;
 }
 
-/* Smoother / slower interactions */
+/* ========== Global smooth hover (slower) ========== */
 a,
-button {
+button,
+[role="button"],
+input[type="file"] + label {
   transition:
-    color 0.35s ease,
-    background-color 0.35s ease,
-    border-color 0.35s ease,
-    box-shadow 0.4s ease,
-    transform 0.25s ease,
-    opacity 0.35s ease;
+    color var(--duration-hover) var(--ease-smooth),
+    background-color var(--duration-hover) var(--ease-smooth),
+    border-color var(--duration-hover) var(--ease-smooth),
+    box-shadow var(--duration-hover) var(--ease-smooth),
+    transform var(--duration-press) var(--ease-smooth),
+    opacity var(--duration-hover) var(--ease-smooth),
+    filter var(--duration-hover) var(--ease-smooth);
 }
 
 button:active,
-a:active {
-  transform: scale(0.98);
+a:active,
+[role="button"]:active {
+  transform: scale(0.985);
+}
+
+/* Cards / panels */
+.rounded-2xl,
+.rounded-3xl {
+  transition:
+    border-color var(--duration-hover) var(--ease-smooth),
+    background-color var(--duration-hover) var(--ease-smooth),
+    box-shadow var(--duration-hover) var(--ease-smooth),
+    transform var(--duration-hover) var(--ease-smooth);
+}
+
+/* Nav links */
+nav a {
+  transition:
+    color var(--duration-hover) var(--ease-smooth),
+    background-color var(--duration-hover) var(--ease-smooth);
+}
+
+/* Footer links */
+footer a {
+  transition: color var(--duration-hover) var(--ease-smooth);
+}
+
+/* White primary buttons feel smoother */
+.bg-white {
+  transition:
+    background-color var(--duration-hover) var(--ease-smooth),
+    transform var(--duration-press) var(--ease-smooth),
+    box-shadow var(--duration-hover) var(--ease-smooth),
+    opacity var(--duration-hover) var(--ease-smooth);
+}
+
+.bg-white:hover {
+  background-color: #f4f4f5;
+}
+
+/* Soft lift on interactive cards when hovering */
+.hover-lift:hover {
+  transform: translateY(-2px);
 }
 
 main {
-  animation: pageIn 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageIn 0.7s var(--ease-smooth);
 }
 
 @keyframes pageIn {
@@ -109,39 +160,38 @@ main {
   }
 }
 
-/* Moving light across navbar */
-@keyframes headerLightSweep {
-  0% {
-    transform: translateX(-120%);
-    opacity: 0;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
-  15% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.85;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(120%);
-    opacity: 0;
+
+  main {
+    animation: none;
   }
 }
 
-.header-light-sweep {
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    transparent 35%,
-    rgba(167, 139, 250, 0.08) 45%,
-    rgba(196, 181, 253, 0.22) 50%,
-    rgba(167, 139, 250, 0.08) 55%,
-    transparent 65%,
-    transparent 100%
-  );
-  animation: headerLightSweep 4.5s ease-in-out infinite;
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  transition: background 0.4s var(--ease-smooth);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
 }
 
 @keyframes shimmer {
@@ -156,59 +206,6 @@ main {
 .skeleton {
   background: linear-gradient(90deg, #0c0c14 25%, #14141f 50%, #0c0c14 75%);
   background-size: 200% 100%;
-  animation: shimmer 2.2s infinite;
+  animation: shimmer 1.8s infinite;
   border-radius: 8px;
-}
-
-/* Progress bar soft pulse when waiting for real encode progress */
-@keyframes progressPulse {
-  0%,
-  100% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.progress-waiting {
-  animation: progressPulse 1.8s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  main {
-    animation: none;
-  }
-
-  .header-light-sweep {
-    animation: none;
-    opacity: 0.15;
-  }
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(167, 139, 250, 0.3);
-}
-
-::selection {
-  background: rgba(167, 139, 250, 0.3);
-  color: white;
 }
