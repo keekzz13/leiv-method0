@@ -144,7 +144,9 @@ export default function OptimizerPage() {
         e instanceof Error
           ? e.message
           : "Prepare failed. Try a different MP4 or Remux mode.";
-      setError(msg);
+      setError(
+        msg || "Prepare failed. Try Remux mode, Chrome/Edge, or a smaller MP4."
+      );
       setStage("error");
       setProgress(0);
     }
