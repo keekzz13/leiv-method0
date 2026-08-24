@@ -19,7 +19,6 @@ function TypingBadge() {
     let timeout: ReturnType<typeof setTimeout>;
 
     if (!deleting && display === current) {
-      // pause on full phrase
       timeout = setTimeout(() => setDeleting(true), 1800);
     } else if (deleting && display === "") {
       setDeleting(false);
@@ -40,11 +39,16 @@ function TypingBadge() {
   }, [display, deleting, phraseIndex]);
 
   return (
-    <span className="inline-flex min-w-[9.5rem] items-center gap-2">
+    <span className="inline-flex items-center justify-center gap-2">
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
-      <span className="tabular-nums">
-        {display}
-        <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-zinc-400 align-middle" style={{ height: "0.9em" }} />
+      <span className="inline-flex min-w-[8.5rem] items-center justify-center text-center">
+        <span>
+          {display}
+          <span
+            className="ml-0.5 inline-block w-[2px] animate-pulse bg-zinc-400 align-middle"
+            style={{ height: "0.9em" }}
+          />
+        </span>
       </span>
     </span>
   );
@@ -58,7 +62,7 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease }}
-          className="mb-6 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs text-zinc-400"
+          className="mb-6 mx-auto inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs text-zinc-400"
         >
           <TypingBadge />
         </motion.div>
