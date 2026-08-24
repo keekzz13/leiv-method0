@@ -259,7 +259,9 @@ export function downloadPrepared(
   data: Uint8Array,
   filename = "tiktok-ready.mp4"
 ) {
-  const blob = new Blob([data], { type: "video/mp4" });
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(data);
+  const blob = new Blob([copy.buffer], { type: "video/mp4" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
