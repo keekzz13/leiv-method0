@@ -10,8 +10,8 @@
   --accent: #a78bfa;
   --glow: rgba(139, 92, 246, 0.35);
   --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-hover: 0.45s;
-  --duration-press: 0.35s;
+  --duration-hover: 0.55s;
+  --duration-press: 0.4s;
 }
 
 * {
@@ -146,7 +146,7 @@ footer a {
 }
 
 main {
-  animation: pageIn 0.7s var(--ease-smooth);
+  animation: pageIn 0.9s var(--ease-smooth);
 }
 
 @keyframes pageIn {
